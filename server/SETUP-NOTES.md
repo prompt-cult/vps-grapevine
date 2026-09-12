@@ -163,3 +163,14 @@ For Hostinger:
 - DNS via IONOS panel (A records)
 - VPS panel for rebuilds (2FA + browser automation)
 - Weekly backups on test VPS, manual on production
+
+## Verified deltas on Ubuntu 26.04.1 (dress rehearsal, srv1035440)
+
+1. Vibe install: `uv tool install mistral-vibe` (npm registry returns 404).
+2. The daemon dispatch needs `~/.vibe/agents/<name>.toml` — the bootstrap
+   must create the agent profile.
+3. The daemon resume flags fail on a fresh box with zero saved sessions —
+   run one manual `vibe -p READY` before starting the daemon.
+4. server/vibe-bridge hardcodes `/opt/vibe-bridge/mail`; use
+   `VPS_GRAPEVINE_MAIL` or `/opt/vps-grapevine/mail` (fixed in repo).
+5. Ubuntu 26.04: Python 3.14, uv scripts fine; no other package deltas.

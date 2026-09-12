@@ -50,7 +50,8 @@ from datetime import datetime, timezone
 VIBE = "/root/.local/bin/vibe"
 WORKDIR = "/root"
 AGENT = "hostinger-manager"
-MAIL = pathlib.Path("/opt/vibe-bridge/mail")
+# Mail path: env override wins; default matches the install dir.
+MAIL = pathlib.Path(os.environ.get("VPS_GRAPEVINE_MAIL", "/opt/vps-grapevine/mail"))
 INBOX = MAIL / "inbox.jsonl"
 OUTBOX = MAIL / "outbox.jsonl"
 INBOX_DIR = MAIL / "inbox"
