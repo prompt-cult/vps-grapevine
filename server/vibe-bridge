@@ -1,0 +1,377 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
+"""vibe-bridge v2: asynchronous inbox/outbox message box with the
+hostinger-manager vibe agent. Replaces the blocking v1 exchange: you post a
+message and get its uuid + timestamp back immediately; the agent works in the
+background and writes a reply into its outbox; you poll `check_messages`.
+
+Mail layout (all under /opt/vibe-bridge/mail/):
+
+  inbox.jsonl                     one JSON per line:
+                                  {"uuid","ts","from","text","attachments":[{name,path}]}
+  inbox/{uuid}/files/...          message attachments, named server-side
+  outbox.jsonl                    one JSON per line:
+                                  {"uuid","ts","path"} - path names the reply
+                                  file or folder to scp down
+  outbox/{uuid}/reply.md          the agent's reply (plus any artifacts)
+  state/processed.jsonl           daemon cursor: uuids already dispatched
+
+Host commands (the script runs on the host):
+  serve                            daemon loop (systemd vibed.service)
+  new-id                           allocate {uuid} + inbox/{uuid}/files/
+  post-message UUID FROM TEXT      append the inbox line, stamped with ts
+  check-messages [--after TS]      print new inbox + outbox jsonl lines
+  status / stop                    daemon control
+
+The daemon: holds the flock (split-brain guard), watches inbox.jsonl, and for
+each new message runs one serialized `vibe -p` dispatch telling the agent to
+read the message + attachments, do the work, and write its reply to
+outbox/{uuid}/reply.md. The daemon never blocks a client: work happens in the
+background; the transcript still lands in /var/log/vibe-bridge.log.
+"""
+from __future__ import annotations
+
+import argparse
+import fcntl
+import json
+import os
+import pathlib
+import socket
+import subprocess
+import sys
+import threading
+import time
+import uuid as uuidlib
+from datetime import datetime, timezone
+
+VIBE = "/root/.local/bin/vibe"
+WORKDIR = "/root"
+AGENT = "hostinger-manager"
+MAIL = pathlib.Path("/opt/vibe-bridge/mail")
+INBOX = MAIL / "inbox.jsonl"
+OUTBOX = MAIL / "outbox.jsonl"
+INBOX_DIR = MAIL / "inbox"
+OUTBOX_DIR = MAIL / "outbox"
+PROCESSED = MAIL / "state" / "processed.jsonl"
+PIDFILE = pathlib.Path("/run/vibed.pid")
+LOCKFILE = pathlib.Path("/run/vibed.lock")
+SOCKFILE = pathlib.Path("/run/vibed.sock")
+LOGFILE = pathlib.Path("/var/log/vibe-bridge.log")
+SESSIONFILE = pathlib.Path("/etc/vibe-bridge/session_id")
+SESSION_INDEX = pathlib.Path("/root/.vibe/logs/session/.session_index.json")
+MAX_WAIT = 3600
+LOCK_HANDLE = None
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+
+
+def pinned_session() -> str:
+    if SESSIONFILE.exists():
+        return SESSIONFILE.read_text().strip()
+    return ""
+
+
+def pin_session() -> None:
+    if not SESSION_INDEX.exists():
+        return
+    try:
+        index = json.loads(SESSION_INDEX.read_text())
+    except (json.JSONDecodeError, OSError):
+        return
+    ours = sorted(
+        (v.get("mtime_ns", 0), v["session_id"])
+        for v in index.values()
+        if v.get("cwd") == WORKDIR and v.get("session_id")
+    )
+    if ours:
+        SESSIONFILE.parent.mkdir(parents=True, exist_ok=True)
+        SESSIONFILE.write_text(f"{ours[-1][1]}\n")
+
+
+def log(line: str) -> None:
+    stamp = datetime.now().isoformat(timespec="seconds")
+    with LOGFILE.open("a") as fh:
+        fh.write(f"\n===== {stamp} =====\n{line}\n")
+
+
+# ---------- mailbox primitives (host side) ----------
+
+def new_id() -> dict:
+    mid = str(uuidlib.uuid4())
+    (INBOX_DIR / mid / "files").mkdir(parents=True, exist_ok=True)
+    return {"uuid": mid, "files_dir": f"{INBOX_DIR}/{mid}/files"}
+
+
+def post_message(mid: str, sender: str, text: str) -> dict:
+    if not (INBOX_DIR / mid).is_dir():
+        raise SystemExit(f"unknown message id {mid} — call new-id first")
+    attachments = [
+        {"name": p.name, "path": str(p)}
+        for p in sorted((INBOX_DIR / mid / "files").iterdir())
+    ] if (INBOX_DIR / mid / "files").is_dir() else []
+    ts = now_iso()
+    record = {"uuid": mid, "ts": ts, "from": sender, "text": text, "attachments": attachments}
+    with INBOX.open("a") as fh:
+        fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+    return record
+
+
+def read_jsonl(path: pathlib.Path, after: str = "") -> list[str]:
+    if not path.exists():
+        return []
+    lines = []
+    for line in path.read_text().splitlines():
+        if not line.strip():
+            continue
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if after and rec.get("ts", "") <= after:
+            continue
+        lines.append(line)
+    return lines
+
+
+def check_messages(after: str) -> dict:
+    return {
+        "now": now_iso(),
+        "inbox": read_jsonl(INBOX, after),
+        "outbox": read_jsonl(OUTBOX, after),
+    }
+
+
+# ---------- daemon ----------
+
+def dispatch(mid: str) -> None:
+    """One serialized vibe -p run that tells the agent to process message mid."""
+    prompt = (
+        f"You have a new message in the bridge mailbox, uuid {mid}. Steps: "
+        f"1) Read /opt/vibe-bridge/mail/inbox.jsonl - the line whose uuid is {mid} "
+        f"(it has the sender, text and attachment paths). "
+        f"2) Read the attachments under /opt/vibe-bridge/mail/inbox/{mid}/files/ if any. "
+        f"3) Do the work it asks. "
+        f"4) Write your reply to /opt/vibe-bridge/mail/outbox/{mid}/reply.md and any "
+        f"other useful artifacts into /opt/vibe-bridge/mail/outbox/{mid}/. "
+        f"5) Append one line to /opt/vibe-bridge/mail/outbox.jsonl: "
+        f'{{"uuid":"{mid}","ts":"<now iso>","path":"/opt/vibe-bridge/mail/outbox/{mid}"}} '
+        f"(ts AFTER you finished writing the files). Never print secrets in reply.md. "
+        f"6) Your final stdout should be just a one-line ACK: processed {mid}."
+    )
+    cmd = [VIBE, "--yolo", "--agent", AGENT, "--trust", "--output", "text"]
+    sid = pinned_session()
+    cmd += ["--resume", sid] if sid else ["--continue"]
+    cmd += ["-p", prompt, "--max-price", "40"]
+    result = subprocess.run(
+        cmd, capture_output=True, text=True, timeout=MAX_WAIT, cwd=WORKDIR,
+        env={**os.environ, "TERM": "dumb"},
+    )
+    pin_session()
+    ack = (result.stdout.strip().splitlines() or [""])[-1]
+    log(f"[{mid}] dispatch rc={result.returncode} ack={ack[:120]}"
+        + (f" err={result.stderr.strip()[-300:]}" if result.returncode != 0 else ""))
+
+
+def worker(mid: str, sem: threading.Semaphore) -> None:
+    with sem:
+        try:
+            dispatch(mid)
+        except Exception as err:  # noqa: BLE001 — never take the daemon down
+            log(f"[{mid}] dispatch error: {err}")
+            try:
+                (OUTBOX_DIR / mid).mkdir(parents=True, exist_ok=True)
+                (OUTBOX_DIR / mid / "reply.md").write_text(
+                    f"dispatch error: {err}\n", encoding="utf-8"
+                )
+                with OUTBOX.open("a") as fh:
+                    fh.write(json.dumps({
+                        "uuid": mid, "ts": now_iso(),
+                        "path": f"{OUTBOX_DIR}/{mid}",
+                        "error": str(err),
+                    }) + "\n")
+            except OSError:
+                pass
+        finally:
+            mark_processed(mid)
+            in_flight.discard(mid)
+
+
+def inbox_cursor() -> set:
+    if not PROCESSED.exists():
+        return set()
+    return {
+        json.loads(ln)["uuid"]
+        for ln in PROCESSED.read_text().splitlines()
+        if ln.strip()
+    }
+
+
+def mark_processed(mid: str) -> None:
+    PROCESSED.parent.mkdir(parents=True, exist_ok=True)
+    with PROCESSED.open("a") as fh:
+        fh.write(json.dumps({"uuid": mid, "ts": now_iso()}) + "\n")
+
+
+def serve() -> int:
+    global LOCK_HANDLE
+    LOCK_HANDLE = open(LOCKFILE, "w")
+    try:
+        fcntl.flock(LOCK_HANDLE, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print("ERROR: another vibed holds the lock — refusing split-brain", file=sys.stderr)
+        return 1
+    for p in (MAIL, INBOX_DIR, OUTBOX_DIR, PROCESSED.parent):
+        p.mkdir(parents=True, exist_ok=True)
+    INBOX.touch(exist_ok=True)
+    OUTBOX.touch(exist_ok=True)
+    PIDFILE.write_text(f"{os.getpid()}\n")
+    SOCKFILE.unlink(missing_ok=True)
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    server.bind(str(SOCKFILE))
+    os.chmod(SOCKFILE, 0o660)
+    server.listen(4)
+    server.settimeout(2.0)
+    sem = threading.Semaphore(1)  # one vibe at a time; queue the rest
+
+    def drain() -> None:
+        """Dispatch inbox messages that have been processed-marked but never
+        answered (crashed daemon) or are entirely new. Processed is marked
+        ONLY after the dispatch finishes, never before."""
+        outbox_ids = set()
+        if OUTBOX.exists():
+            for line in OUTBOX.read_text().splitlines():
+                try:
+                    outbox_ids.add(json.loads(line)["uuid"])
+                except (json.JSONDecodeError, KeyError):
+                    continue
+        for line in read_jsonl(INBOX):
+            rec = json.loads(line)
+            mid = rec["uuid"]
+            if mid in outbox_ids or mid in in_flight:
+                continue
+            in_flight.add(mid)
+            log(f"[{mid}] in from {rec.get('from')}: {rec.get('text', '')[:160]}")
+            threading.Thread(target=worker, args=(mid, sem), daemon=True).start()
+
+    in_flight: set = set()
+    inbox_size = INBOX.stat().st_size
+    loop = 0
+    print(f"vibed v2 up (pid {os.getpid()}, session {pinned_session() or '(new)'}), mailbox at {MAIL}", flush=True)
+    while True:
+        # drain inbox: on size change, and periodically to catch crashes
+        try:
+            size = INBOX.stat().st_size
+            if size != inbox_size or loop % 15 == 0:
+                inbox_size = size
+                drain()
+            loop += 1
+        except (json.JSONDecodeError, OSError) as err:
+            log(f"inbox drain error: {err}")
+        # serve control socket
+        try:
+            conn, _ = server.accept()
+        except socket.timeout:
+            continue
+        with conn:
+            try:
+                request = json.loads(conn.recv(4_194_304).decode())
+            except (json.JSONDecodeError, OSError) as err:
+                conn.sendall(json.dumps({"error": str(err)}).encode())
+                continue
+            if request.get("cmd") == "stop":
+                conn.sendall(json.dumps({"ok": "stopping"}).encode())
+                break
+            if request.get("cmd") == "status":
+                conn.sendall(json.dumps({
+                    "pid": os.getpid(),
+                    "session": pinned_session(),
+                    "processed": len(inbox_cursor()),
+                }).encode())
+                continue
+            if request.get("cmd") == "sync_exchange":
+                # legacy blocking exchange, used only for pre-mailbox bootstrapping
+                text = request.get("text", "")
+                wait = min(int(request.get("wait", MAX_WAIT)), MAX_WAIT)
+                prompt = text
+                cmd = [VIBE, "--yolo", "--agent", AGENT, "--trust", "--output", "text"]
+                sid = pinned_session()
+                cmd += ["--resume", sid] if sid else ["--continue"]
+                cmd += ["-p", prompt, "--max-price", "40"]
+                try:
+                    result = subprocess.run(
+                        cmd, capture_output=True, text=True, timeout=wait, cwd=WORKDIR,
+                        env={**os.environ, "TERM": "dumb"},
+                    )
+                    pin_session()
+                    if result.returncode != 0:
+                        conn.sendall(json.dumps({"error": result.stderr.strip()[-400:]}).encode())
+                    else:
+                        reply = result.stdout.strip()
+                        log(f">>> {text}\n<<< {reply}")
+                        conn.sendall(json.dumps({"reply": reply}).encode())
+                except subprocess.TimeoutExpired:
+                    conn.sendall(json.dumps({"error": f"timeout after {wait}s"}).encode())
+                continue
+    SOCKFILE.unlink(missing_ok=True)
+    PIDFILE.unlink(missing_ok=True)
+    print("vibed down", flush=True)
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = parser.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("serve")
+    sub.add_parser("new-id")
+    post_p = sub.add_parser("post-message")
+    post_p.add_argument("mid")
+    post_p.add_argument("sender")
+    post_p.add_argument("text")
+    check_p = sub.add_parser("check-messages")
+    check_p.add_argument("--after", default="")
+    sub.add_parser("status")
+    sub.add_parser("stop")
+    args = parser.parse_args()
+
+    if args.cmd == "serve":
+        return serve()
+    if args.cmd == "new-id":
+        print(json.dumps(new_id()))
+        return 0
+    if args.cmd == "post-message":
+        print(json.dumps(post_message(args.mid, args.sender, args.text)))
+        return 0
+    if args.cmd == "check-messages":
+        print(json.dumps(check_messages(args.after)))
+        return 0
+    if args.cmd == "status":
+        if PIDFILE.exists():
+            pid = PIDFILE.read_text().strip()
+            alive = pathlib.Path(f"/proc/{pid}").exists()
+            print(f"vibed: pid {pid} {'running' if alive else 'DEAD (stale pidfile)'}")
+        else:
+            print("vibed: not running")
+        print(json.dumps(check_messages("")))
+        return 0
+    if args.cmd == "stop":
+        if not SOCKFILE.exists():
+            print("vibed: not running")
+            PIDFILE.unlink(missing_ok=True)
+            return 0
+        client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        client.settimeout(10)
+        client.connect(str(SOCKFILE))
+        client.sendall(json.dumps({"cmd": "stop"}).encode())
+        client.recv(1024)
+        print("stop requested")
+        return 0
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
