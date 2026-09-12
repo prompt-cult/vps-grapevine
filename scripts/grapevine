@@ -77,7 +77,13 @@ if [ ! -x /root/.local/bin/vibe ]; then
   bash -lc 'npm i -g mistral-vibe' >/dev/null 2>&1 || true
 fi
 install -m 644 /dev/null /var/log/vps-grapevine.log 2>/dev/null || touch /var/log/vps-grapevine.log
-cat > /etc/systemd/system/vibed.service <<'UNIT'
+# agent profile from the template (Fix: daemon dispatch needs a profile)
+install -m 644 /opt/vps-grapevine/AGENTS.md.template /dev/null 2>/dev/null || true
+cat > /root/.vibe/agents/box-manager.toml <<'TOMLEOF'
+description = "Box agent managed by the vps-grapevine daemon"
+TOMLEOF
+systemctl daemon-reload
+systemctl enable vibed >/dev/null 2>&1 || true
 [Unit]
 Description=vps-grapevine: box-manager vibe agent daemon (headless)
 Documentation=file:///opt/vps-grapevine/vibe-bridge
@@ -95,6 +101,10 @@ WantedBy=multi-user.target
 UNIT
 systemctl daemon-reload
 systemctl enable vibed >/dev/null 2>&1 || true
+# first run: create the initial session (daemon resume fails on zero sessions)
+if ! ls /root/.vibe/logs/session/.session_index.json >/dev/null 2>&1; then
+  /root/.local/bin/vibe -p READY --yolo --agent box-manager --trust >/dev/null 2>&1 || true
+fi
 systemctl restart vibed
 sleep 2
 systemctl is-active vibed

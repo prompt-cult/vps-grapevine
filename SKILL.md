@@ -18,8 +18,8 @@ send work to / read replies from a box that already runs the grapevine.
 - SSH root access to the VPS (password or key)
 - On the box: Ubuntu 22.04/24.04 LTS, `uv` (snap or standalone), `tmux` is
   NOT required (headless by design), `docker` optional
-- The Mistral Vibe CLI installed on the box at `$HOME/.local/bin/vibe`
-  (`npm i -g mistral-vibe`), with an API key configured once via `vibe --setup`
+- The Mistral Vibe CLI installed on the box (`uv tool install mistral-vibe`
+  — npm does not carry it), with an API key configured once via `vibe --setup`
 - Environment: `SRV_HOST` set (e.g. `root@srv012345.example.hstgr.cloud`)
 
 ## Bootstrap (cold VPS)
@@ -32,7 +32,10 @@ What it does on the box: installs nothing beyond what apt needs (curl, git),
 creates `/opt/vps-grapevine/`, writes `server/vibe-bridge` there, installs
 `vibed.service`, writes `/root/AGENTS.md` from
 `server/AGENTS.md.template` (appending, never clobbering), installs the
-Mistral Vibe CLI if missing, and starts the daemon. It never reboots the box.
+Mistral Vibe CLI if missing (`uv tool install mistral-vibe`), creates the
+agent profile TOML, runs the FIRST-RUN `vibe -p READY` (the daemon's
+resume flags fail on a box with zero saved sessions), and starts the
+daemon. It never reboots the box.
 
 Then one-time: SSH in and run `vibe --setup` to store the agent API key, then
 `vibe-bridge new-id && vibe-bridge post-message <uuid> <your-name> "hello"` —
