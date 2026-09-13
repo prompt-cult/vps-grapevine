@@ -1,0 +1,20 @@
+[Unit]
+Description=Vibe Bridge Daemon (vps-grapevine)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/env -S uv run --script /opt/vps-grapevine/vibe-bridge serve
+Restart=on-failure
+RestartSec=5
+Environment=VPS_GRAPEVINE_MAIL=/opt/vps-grapevine/mail
+Environment=TERM=dumb
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/vps-grapevine /var/log /run /etc/vibe-bridge /root/.vibe
+ProtectHome=read-only
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,262 @@
+# Setup Notes: vps-grapevine on Debian 13 (Trixie) with Podman
+
+This is a remix of the original Ubuntu setup (see SETUP-NOTES.md) for Debian
+Trixie on IONOS Cloud Panel. The key differences:
+
+- **Podman instead of Docker** — daemonless, rootless by default, Quadlet for systemd
+- **apps user** — unprivileged service user for rootless containers + vibe daemon
+- **nftables port redirect** — kernel NAT forwards 80/443 to high loopback ports,
+  so Traefik runs rootless without CAP_NET_BIND_SERVICE
+- **No Docker daemon** — no `dockerd`, no `/var/run/docker.sock` attack surface
+
+## Phase 0: Base system
+
+```bash
+apt update && apt full-upgrade -y
+apt install -y curl git unzip age gpg build-essential nftables
+```
+
+## Phase 1: Create the apps user
+
+Rootless Podman needs a dedicated unprivileged user with subuid/subgid ranges.
+
+```bash
+# create a service user with a home directory and login
+adduser --gecos "" apps
+
+# confirm it got subuid/subgid ranges (apt install podman sets these up)
+grep apps /etc/subuid /etc/subgid
+```
+
+Everything below assumes that `apps` user.
+
+## Phase 2: Install Podman
+
+Debian 13 ships Podman 5.4.x from main repos — no third-party sources needed.
+
+```bash
+apt install -y podman podman-compose podman-docker
+
+# enable the Docker-compatible socket (system, rootful Podman)
+# Traefik's Docker provider talks to this socket
+systemctl enable --now podman.socket
+# socket lives at /run/podman/podman.sock
+
+# enable lingering so rootless services survive logout
+loginctl enable-linger apps
+```
+
+### Why Podman not Docker
+
+Docker's security problem is the long-running root daemon (`dockerd`). Any
+process that can talk to the Docker socket effectively has root on the host.
+Mount that socket into a container and a container escape = full host
+compromise.
+
+Podman is daemonless — each `podman run` is a short-lived process. Rootless
+by default via user namespaces + subuid/subgid ranges. A container escape
+lands in a heavily-mapped unprivileged UID, not root.
+
+CLI-compatible: `podman` accepts the same commands as `docker`. Existing
+compose files work via `podman-compose`. Quadlet generates systemd units
+from `.container` files.
+
+## Phase 3: Directory layout
+
+Two kinds of files: config you write (Quadlet units, Traefik config) and
+persistent data the containers write (DBs, certs, uploaded files).
+
+```
+/home/apps/
+├── config/                          # your hand-written config (version-control this)
+│   ├── containers/systemd/          # Quadlet .container/.network/.volume files
+│   │   ├── traefik.container
+│   │   ├── whoami.container
+│   │   ├── traefik-network.network
+│   │   └── ...
+│   └── traefik/
+│       ├── traefik.yml              # static Traefik config
+│       └── dynamic/                 # dynamic file-provider config (if you use it)
+│
+├── data/                            # persistent container data (DON'T version-control)
+│   ├── traefik/
+│   │   └── acme.json                # Let's Encrypt certs — chmod 600
+│   └── <appname>/                   # per-app volumes
+│
+└── compose/                         # optional: podman-compose files if you prefer compose
+```
+
+### Where Quadlet looks, by default
+
+Quadlet searches these paths (run as the `apps` user):
+- `~/.config/containers/systemd/*.container` (rootless, per-user)
+- `/etc/containers/systemd/` (system-wide, rootful — only if you run something rootful)
+
+```bash
+# as the apps user:
+mkdir -p ~/.config/containers/systemd
+mkdir -p ~/config/traefik/dynamic
+mkdir -p ~/data/traefik
+```
+
+When you drop a `.container` file there and run `systemctl --user daemon-reload`,
+Podman auto-generates the systemd unit. You then manage it with
+`systemctl --user start traefik`, `systemctl --user status traefik`, etc.
+
+## Phase 4: nftables — SSH + port redirect for rootless Traefik
+
+Instead of running Traefik as root to bind 80/443, we use kernel NAT to
+redirect incoming 80/443 to high loopback ports where rootless Traefik
+listens. This is the "OS NAT" approach — no rootful container, no
+CAP_NET_BIND_SERVICE hack.
+
+The nftables ruleset:
+1. Input: allow loopback, ICMP, established/related, TCP 22 (SSH only)
+2. Input: allow TCP 80/443 (so the packets arrive)
+3. NAT prerouting: redirect 80 → 8080, 443 → 8443 (loopback)
+4. Forward: drop (no Docker daemon to DNAT through)
+5. Traefik listens on 127.0.0.1:8080 and 127.0.0.1:8443 as the apps user
+
+See `server/nftables/nftables-debian.conf` for the full ruleset.
+
+### Why not run Traefik as root?
+
+- Rootful containers are the Docker security problem we're avoiding
+- `CAP_NET_BIND_SERVICE` is a capability escalation that can be exploited
+- Kernel NAT is the cleanest split: the OS does the port translation, Traefik
+  stays unprivileged, no capabilities needed
+
+### Why not just open 80/443 in the firewall and let Traefik bind directly?
+
+Rootless Podman can't bind ports below 1024 — those need root. The nftables
+redirect is the bridge: the kernel rewrites the destination port before the
+packet reaches userspace, so Traefik only ever sees 8080/8443.
+
+## Phase 5: Install uv and Mistral Vibe CLI
+
+```bash
+# as root — install uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source /root/.local/bin/env
+
+# install mistral-vibe via uv tool
+uv tool install mistral-vibe
+
+# verify
+vibe --version
+```
+
+The vibe binary lands at `/root/.local/bin/vibe`.
+
+## Phase 6: Vibe configuration
+
+```bash
+# config directory
+mkdir -p /root/.vibe
+
+# write config with the Mistral API key
+cat > /root/.vibe/config.toml << 'EOF'
+[providers.mistral]
+api_key = "<MISTRAL_API_KEY from .env>"
+EOF
+
+# create the agent profile
+mkdir -p /root/.vibe/agents
+cat > /root/.vibe/agents/box-manager.toml << 'EOF'
+model = "zai-glm-5-2"
+EOF
+```
+
+## Phase 7: Install vibe-bridge + mailbox
+
+```bash
+mkdir -p /opt/vps-grapevine/mail
+cp vibe-bridge /opt/vps-grapevine/
+chmod +x /opt/vps-grapevine/vibe-bridge
+```
+
+The vibe-bridge script is adapted for Debian Trixie:
+- VIBE path: `/root/.local/bin/vibe`
+- WORKDIR: `/root`
+- AGENT: `box-manager`
+- MAIL: `/opt/vps-grapevine/mail` (env override: `VPS_GRAPEVINE_MAIL`)
+- PIDFILE: `/run/vibed.pid`
+- LOCKFILE: `/run/vibed.lock`
+- SOCKFILE: `/run/vibed.sock`
+- LOGFILE: `/var/log/vibe-bridge.log`
+- SESSIONFILE: `/etc/vibe-bridge/session_id`
+
+## Phase 8: systemd vibed.service
+
+```ini
+[Unit]
+Description=Vibe Bridge Daemon (vps-grapevine)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/env -S uv run --script /opt/vps-grapevine/vibe-bridge serve
+Restart=on-failure
+RestartSec=5
+Environment=VPS_GRAPEVINE_MAIL=/opt/vps-grapevine/mail
+Environment=TERM=dumb
+# Security: lock down the daemon
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/vps-grapevine /var/log /run /etc/vibe-bridge /root/.vibe
+ProtectHome=read-only
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Install:
+```bash
+cp vibed.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable vibed
+```
+
+## Phase 9: First run + start daemon
+
+```bash
+# first run to initialize the session (must succeed before daemon starts)
+vibe -p READY --yolo --agent box-manager --trust
+
+# start the daemon
+systemctl start vibed
+systemctl status vibed
+```
+
+## Phase 10: AGENTS.md on the box
+
+Append the box policy from `server/AGENTS.md.template` to `/root/AGENTS.md`.
+The template is adapted for Debian Trixie:
+- References Podman/Quadlet instead of Docker
+- References nftables port redirect instead of Docker DNAT
+- References the apps user for container workloads
+- Vibe daemon runs as root (SSH-only, no network exposure)
+- App containers run as the apps user (rootless Podman)
+
+## Summary: what runs as what
+
+| Component | User | Why |
+|---|---|---|
+| SSH daemon (sshd) | root | port 22, always |
+| vibed.service (vibe-bridge) | root | owns the mailbox, runs vibe -p |
+| vibe agent | root | programmatic mode, no TUI |
+| Podman socket | root | Docker-compatible API for Traefik |
+| Traefik (future) | apps | rootless, listens on 127.0.0.1:8080/8443 |
+| App containers (future) | apps | rootless Podman + Quadlet |
+| nftables | root | kernel NAT 80→8080, 443→8443 |
+
+## Verified deltas on Debian 13 (Trixie)
+
+1. Vibe install: `uv tool install mistral-vibe` (npm returns 404 on Debian)
+2. Podman 5.4.x from apt, no third-party repos
+3. nftables `redirect to` in nat prerouting for port translation
+4. Python 3.14 ships with Trixie; uv scripts work fine
+5. `loginctl enable-linger apps` required for rootless services to survive logout
+6. No Docker daemon — podman.socket provides the Docker-compatible API
