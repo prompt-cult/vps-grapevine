@@ -262,6 +262,41 @@ The template is adapted for Debian Trixie:
 1. Vibe install: `uv tool install mistral-vibe` (npm returns 404 on Debian)
 2. Podman 5.4.x from apt, no third-party repos
 3. nftables `redirect to` in nat prerouting for port translation
-4. Python 3.14 ships with Trixie; uv scripts work fine
+4. Python 3.13 ships with Trixie; uv scripts work fine
 5. `loginctl enable-linger apps` required for rootless services to survive logout
 6. No Docker daemon — podman.socket provides the Docker-compatible API
+7. Rootless Traefik needs the apps user's own podman socket at
+   `/run/user/1000/podman/podman.sock`, not the system socket at
+   `/run/podman/podman.sock`. Enable it with
+   `systemctl --machine=apps@.host --user enable --now podman.socket`.
+8. The Traefik static config must reference the in-container socket path
+   `unix:///var/run/docker.sock`, not the host path — the Quadlet volume
+   mount maps the host socket to the container path.
+
+## Security incident: dashboard exposed with admin/admin
+
+During initial setup, the Traefik dashboard was exposed on
+`traefik.vps1.stenographer.cloud` with basic auth credentials `admin/admin`.
+This is a trivially guessable password on a public-facing admin panel —
+unacceptable for any internet-facing host.
+
+**What happened:** The Quadlet unit included dashboard router labels and a
+basic auth middleware with a hardcoded `admin:{SHA}...` hash. The DNS A
+record for `traefik.vps1.stenographer.cloud` was added, which would have
+allowed Let's Encrypt to provision a TLS cert and make the dashboard
+reachable from the internet.
+
+**What was done to fix it:**
+- Removed all dashboard router labels from the Traefik Quadlet unit
+- Set `api.dashboard: false` and `api.insecure: false` in the static config
+- Restarted Traefik — no dashboard or API endpoint is exposed
+- The `traefik.vps1.stenographer.cloud` DNS record returns a 404 (no
+  matching route in Traefik)
+
+**Lesson:** Never expose admin dashboards to the internet with default or
+trivially guessable credentials. If a dashboard is needed, use SSH port
+forwarding:
+```bash
+ssh -L 8080:127.0.0.1:8080 root@vps1.stenographer.cloud
+# then visit http://localhost:8080/dashboard/ locally
+```
