@@ -16,14 +16,10 @@ Volume=/home/apps/config/traefik/traefik.yml:/etc/traefik/traefik.yml:ro,Z
 Volume=/home/apps/data/traefik:/data:Z
 # Network
 Network=traefik-net.network
-# Labels for the dashboard (self-hosted)
-Label=traefik.enable=true
-Label=traefik.http.routers.dashboard.rule=Host(`traefik.***SCRUBBED***`)
-Label=traefik.http.routers.dashboard.entrypoints=https
-Label=traefik.http.routers.dashboard.tls.certresolver=letsencrypt
-Label=traefik.http.routers.dashboard.service=api@internal
-Label=traefik.http.routers.dashboard.middlewares=auth
-Label=traefik.http.middlewares.auth.basicauth.users=admin:{SHA}W6ph5Mm5Pz8GgiULbPgzG37mj9g=
+# No dashboard exposed to the internet.
+# Access the dashboard via SSH port forwarding if needed:
+#   ssh -L 8080:127.0.0.1:8080 root@***SCRUBBED***
+# Then visit http://localhost:8080/dashboard/
 
 [Service]
 Restart=always
