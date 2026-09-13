@@ -84,6 +84,7 @@ description = "Box agent managed by the vps-grapevine daemon"
 TOMLEOF
 systemctl daemon-reload
 systemctl enable vibed >/dev/null 2>&1 || true
+cat > /etc/systemd/system/vibed.service <<'UNIT'
 [Unit]
 Description=vps-grapevine: box-manager vibe agent daemon (headless)
 Documentation=file:///opt/vps-grapevine/vibe-bridge

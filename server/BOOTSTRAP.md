@@ -37,7 +37,7 @@ Two objects:
 2. the encrypted env bundle (private).
 
 ```bash
-TAG=v0.2.0
+TAG=v0.2.1
 cd <repo checkout>
 curl -L -o /tmp/repo.zip https://github.com/simbo1905/vps-grapevine/archive/refs/tags/${TAG}.zip
 
@@ -77,7 +77,7 @@ curl -sI '<presigned-url>' | head -1     # expect: HTTP/1.1 200 OK
 On the fresh box, as root:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/simbo1905/vps-grapevine/v0.2.0/scripts/bootstrap.sh -o /tmp/bootstrap.sh
+curl -fsSL https://raw.githubusercontent.com/simbo1905/vps-grapevine/v0.2.1/scripts/bootstrap.sh -o /tmp/bootstrap.sh
 # only if GitHub is unreachable from the box, also presign the repo zip and:
 #   export VPS_GRAPEVINE_BUCKET_ZIP_URL='<presigned-repo-zip-url>'
 bash /tmp/bootstrap.sh '<presigned-env-bundle-url>'

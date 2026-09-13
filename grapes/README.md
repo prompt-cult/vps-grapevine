@@ -30,7 +30,7 @@ Rules for `grape-<app>.md`:
 - Folder name = app name, lowercase, hyphens (`grapes/forgejo/`).
 - Grape versions **track repo tags**: a grape folder is frozen at whatever
   repo tag ships it. Changes to a grape mean a new repo tag. Reference the
-  tag in `grape-<app>.md` ("landed at v0.2.0").
+   tag in `grape-<app>.md` ("landed at v0.2.1").
 - Provider- or box-specific values (domains, IPs, client secrets) never live
   in the grape folder — they live in `.env` on the box.
 
