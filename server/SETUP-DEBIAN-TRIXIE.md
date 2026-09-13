@@ -111,18 +111,54 @@ Podman auto-generates the systemd unit. You then manage it with
 ## Phase 4: nftables — SSH + port redirect for rootless Traefik
 
 Instead of running Traefik as root to bind 80/443, we use kernel NAT to
-redirect incoming 80/443 to high loopback ports where rootless Traefik
+DNAT incoming 80/443 to 127.0.0.1:8080/8443 where rootless Traefik
 listens. This is the "OS NAT" approach — no rootful container, no
 CAP_NET_BIND_SERVICE hack.
 
-The nftables ruleset:
+### Prerequisites: sysctl settings
+
+DNAT to 127.0.0.1 requires three sysctl settings that are NOT default:
+
+```bash
+# Enable IP forwarding (needed for NAT to work)
+sysctl -w net.ipv4.ip_forward=1
+
+# Allow routing to 127.0.0.1 (loopback) from external interfaces
+# Without this, the kernel drops packets DNAT'd to 127.0.0.1
+sysctl -w net.ipv4.conf.all.route_localnet=1
+sysctl -w net.ipv4.conf.ens6.route_localnet=1
+
+# Persist across reboots
+cat > /etc/sysctl.d/99-route-localnet.conf << 'EOF'
+net.ipv4.conf.ens6.route_localnet=1
+net.ipv4.ip_forward = 1
+EOF
+```
+
+**Note:** `route_localnet=1` must be set on `all` AND on the specific
+interface (e.g. `ens6`). Check your interface name with `ip addr` —
+IONOS VPS uses `ens6`.
+
+### The nftables ruleset
+
 1. Input: allow loopback, ICMP, established/related, TCP 22 (SSH only)
 2. Input: allow TCP 80/443 (so the packets arrive)
-3. NAT prerouting: redirect 80 → 8080, 443 → 8443 (loopback)
-4. Forward: drop (no Docker daemon to DNAT through)
-5. Traefik listens on 127.0.0.1:8080 and 127.0.0.1:8443 as the apps user
+3. Input: allow TCP 8080/8443 (DNAT targets — packets rewritten to
+   127.0.0.1:8080/8443 arrive on the input chain for local delivery)
+4. NAT prerouting: DNAT 80 → 127.0.0.1:8080, 443 → 127.0.0.1:8443
+5. NAT postrouting: masquerade on lo so reply traffic has correct source
+6. Forward: policy accept (DNAT'd packets may traverse forward chain)
+7. Traefik listens on 127.0.0.1:8080 and 127.0.0.1:8443 as the apps user
 
 See `server/nftables/nftables-debian.conf` for the full ruleset.
+
+### Why DNAT to 127.0.0.1 and not `redirect to`?
+
+`redirect to :8080` changes the destination port but keeps the destination
+IP as the external IP. Traefik (via rootlessport) only listens on
+127.0.0.1:8080, so the connection is refused. `dnat to 127.0.0.1:8080`
+rewrites both the IP and port, delivering the packet to the loopback
+address where Traefik is actually listening.
 
 ### Why not run Traefik as root?
 
@@ -168,7 +204,7 @@ EOF
 # create the agent profile
 mkdir -p /root/.vibe/agents
 cat > /root/.vibe/agents/box-manager.toml << 'EOF'
-model = "zai-glm-5-2"
+model = "mistral-medium-3.5"
 EOF
 ```
 
@@ -261,7 +297,9 @@ The template is adapted for Debian Trixie:
 
 1. Vibe install: `uv tool install mistral-vibe` (npm returns 404 on Debian)
 2. Podman 5.4.x from apt, no third-party repos
-3. nftables `redirect to` in nat prerouting for port translation
+3. nftables `dnat to 127.0.0.1:8080` in nat prerouting (NOT `redirect to` —
+   redirect keeps the external IP as destination, but Traefik only listens on
+   127.0.0.1, so the connection is refused)
 4. Python 3.13 ships with Trixie; uv scripts work fine
 5. `loginctl enable-linger apps` required for rootless services to survive logout
 6. No Docker daemon — podman.socket provides the Docker-compatible API
@@ -272,6 +310,17 @@ The template is adapted for Debian Trixie:
 8. The Traefik static config must reference the in-container socket path
    `unix:///var/run/docker.sock`, not the host path — the Quadlet volume
    mount maps the host socket to the container path.
+9. DNAT to 127.0.0.1 requires `net.ipv4.ip_forward=1` AND
+   `net.ipv4.conf.all.route_localnet=1` AND
+   `net.ipv4.conf.<iface>.route_localnet=1`. Without ip_forward, NAT
+   silently drops packets. Without route_localnet, the kernel refuses to
+   route to 127.0.0.1 from an external interface.
+10. The input chain must allow TCP 8080 and 8443 — DNAT'd packets to
+    127.0.0.1 arrive on the input chain (local delivery), not the forward
+    chain.
+11. The vibe-bridge `in_flight` set must be module-level, not local to
+    `serve()` — the `worker()` thread references it and gets a NameError
+    if it's a local variable.
 
 ## Security incident: dashboard exposed with admin/admin
 
