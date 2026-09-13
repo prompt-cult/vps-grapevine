@@ -42,6 +42,11 @@ apt install -y podman podman-compose podman-docker
 systemctl enable --now podman.socket
 # socket lives at /run/podman/podman.sock
 
+# enable the apps user's own rootless podman socket
+# Traefik (running as apps) mounts this into its container
+systemctl --machine=apps@.host --user enable --now podman.socket
+# rootless socket lives at /run/user/1000/podman/podman.sock
+
 # enable lingering so rootless services survive logout
 loginctl enable-linger apps
 ```
