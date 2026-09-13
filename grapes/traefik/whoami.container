@@ -6,8 +6,10 @@ ContainerName=whoami
 Network=traefik-net.network
 Label=traefik.enable=true
 Label=traefik.http.routers.whoami.rule=Host(`***SCRUBBED***`)
-Label=traefik.http.routers.whoami.entrypoints=https
-Label=traefik.http.routers.whoami.tls.certresolver=letsencrypt
+Label=traefik.http.routers.whoami.entrypoints=http
+Label=traefik.http.routers.whoami-https.rule=Host(`***SCRUBBED***`)
+Label=traefik.http.routers.whoami-https.entrypoints=https
+Label=traefik.http.routers.whoami-https.tls.certresolver=letsencrypt
 
 [Service]
 Restart=always
