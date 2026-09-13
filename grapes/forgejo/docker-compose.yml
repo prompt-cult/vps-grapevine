@@ -1,0 +1,89 @@
+name: forgejo
+
+services:
+  forgejo-db:
+    image: postgres:17-alpine
+    container_name: forgejo-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${FORGEJO_DB_PASSWORD}
+      POSTGRES_USER: forgejo
+      POSTGRES_DB: forgejo
+    volumes:
+      - forgejo-db-data:/var/lib/postgresql/data
+    networks:
+      - forgejo
+
+  forgejo:
+    image: codeberg.org/forgejo/forgejo:${FORGEJO_VERSION}
+    container_name: forgejo
+    restart: unless-stopped
+    environment:
+      FORGEJO__database__DB_TYPE: postgres
+      FORGEJO__database__HOST: forgejo-db:5432
+      FORGEJO__database__NAME: forgejo
+      FORGEJO__database__USER: forgejo
+      FORGEJO__database__PASSWD: ${FORGEJO_DB_PASSWORD}
+      FORGEJO__server__DOMAIN: ${FORGEJO_DOMAIN}
+      FORGEJO__server__ROOT_URL: https://${FORGEJO_DOMAIN}/
+      FORGEJO__server__HTTP_PORT: "3000"
+      FORGEJO__security__INSTALL_LOCK: "true"
+      FORGEJO__service__DISABLE_REGISTRATION: "true"
+    volumes:
+      - /opt/forgejo/data:/data
+    depends_on:
+      - forgejo-db
+    networks:
+      - forgejo
+
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:${OAUTH2_PROXY_VERSION}
+    container_name: oauth2-proxy
+    restart: unless-stopped
+    command:
+      - --provider=oidc
+      - --oidc-issuer-url=${OIDC_ISSUER}
+      - --client-id=${OIDC_CLIENT_ID}
+      - --client-secret=${OIDC_CLIENT_SECRET}
+      - --redirect-url=https://${FORGEJO_DOMAIN}/oauth2/callback
+      - --upstream=http://forgejo:3000/
+      - --scope=openid profile email
+      - --cookie-secret=${COOKIE_SECRET}
+      - --cookie-secure=true
+      - --cookie-samesite=lax
+      - --email-domain=*
+      - --http-address=0.0.0.0:4180
+      - --reverse-proxy=true
+      - --proxy-prefix=/oauth2
+      - --pass-authorization-header=true
+      - --set-authorization-header=true
+      - --set-xauthrequest=true
+      - --pass-access-token=true
+      - --skip-provider-button=true
+    depends_on:
+      - forgejo
+    networks:
+      - forgejo
+      - traefik
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik
+      - traefik.http.routers.forgejo-web.rule=Host(`${FORGEJO_DOMAIN}`)
+      - traefik.http.routers.forgejo-web.entrypoints=web
+      - traefik.http.routers.forgejo-web.service=forgejo
+      - traefik.http.routers.forgejo-websecure.rule=Host(`${FORGEJO_DOMAIN}`)
+      - traefik.http.routers.forgejo-websecure.entrypoints=websecure
+      - traefik.http.routers.forgejo-websecure.tls=true
+      - traefik.http.routers.forgejo-websecure.tls.certresolver=letsencrypt
+      - traefik.http.routers.forgejo-websecure.service=forgejo
+      - traefik.http.services.forgejo.loadbalancer.server.port=4180
+
+volumes:
+  forgejo-db-data:
+
+networks:
+  forgejo:
+    name: forgejo
+  traefik:
+    name: traefik
+    external: true

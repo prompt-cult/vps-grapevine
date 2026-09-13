@@ -6,7 +6,7 @@
 #
 # $1: presigned (mc share download --expire 1h) URL of the encrypted env
 #     bundle (env/bundle.tar.gz.age or .gpg). See server/BOOTSTRAP.md.
-# $2: optional repo tag (default v0.2.0), or VPS_GRAPEVINE_TAG env var.
+# $2: optional repo tag (default v0.2.1), or VPS_GRAPEVINE_TAG env var.
 #
 # Idempotent; never reboots the box. Decrypts the env bundle only in a
 # temporary file which is wiped (shred) before this script exits.
@@ -14,7 +14,7 @@
 set -euo pipefail
 
 ENV_BUNDLE_URL="${1:?usage: bash bootstrap.sh '<presigned-env-bundle-url>' [tag]}"
-TAG="${2:-${VPS_GRAPEVINE_TAG:-v0.2.0}}"
+TAG="${2:-${VPS_GRAPEVINE_TAG:-v0.2.1}}"
 ROOT=/opt/vps-grapevine
 GITHUB_ZIP="https://github.com/simbo1905/vps-grapevine/archive/refs/tags/${TAG}.zip"
 BUCKET_ZIP="${VPS_GRAPEVINE_BUCKET_ZIP_URL:-}"
