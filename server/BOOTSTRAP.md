@@ -52,7 +52,7 @@ mc cp env/bundle.tar.gz.age vpsgrapevine/vps-grapevine-20260913/env/bundle.tar.g
 
 # sanity: the bucket must be private (no anonymous download)
 mc anonymous get vpsgrapevine/vps-grapevine-20260913
-# expect: "Access permission for 'vpsgrapevine/vps-grapevine-20260913' is set to 'none'"
+# expect: "Access permission for `vpsgrapevine/vps-grapevine-20260913` is `private`"
 ```
 
 ## 3. Laptop: presign (1 hour, download only)
@@ -68,8 +68,10 @@ mc share download --expire 1h vpsgrapevine/vps-grapevine-20260913/repo-${TAG}.zi
 Smoke test before handing it over (laptop):
 
 ```bash
-curl -sI '<presigned-url>' | head -1     # expect: HTTP/1.1 200 OK
-# after expiry (1h) the same URL returns 403 — that is the point.
+curl -s -o /dev/null -w '%{http_code}\n' '<presigned-url>'   # expect: 200
+# (Scaleway presigns are method-bound: a HEAD against this GET URL
+# returns 403, so check with a plain GET, not curl -I)
+# after expiry (1h) the same GET returns 403 — that is the point.
 ```
 
 ## 4. Box: install from the presigned URL
