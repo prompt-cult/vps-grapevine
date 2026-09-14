@@ -9,6 +9,38 @@ Trixie on IONOS Cloud Panel. The key differences:
   so Traefik runs rootless without CAP_NET_BIND_SERVICE
 - **No Docker daemon** — no `dockerd`, no `/var/run/docker.sock` attack surface
 
+## Host inventory — IPs and roles
+
+There is exactly one IONOS.de VPS. These are the only IPs in this project:
+
+| Host | IP | Provider | OS | Role |
+|---|---|---|---|---|
+| vps0 | 31.70.75.165 | IONOS.de | Debian 13 Trixie | Production VPS (IdP, Traefik, vibe agent) |
+| vps1 | 72.61.145.134 | Hostinger | Ubuntu 24.04 | Test box (stable, KVM2, larger) |
+| vps2 | 72.61.16.48 | Hostinger | Ubuntu 24.04 | Burner/expiring (KVM1, smaller) |
+| Managed Nextcloud | 217.160.0.81 | IONOS.de | Managed hosting | Nextcloud Enterprise (NOT a VPS — no SSH, no Docker, no admin access) |
+
+### Managed Nextcloud (217.160.0.81)
+
+This project uses IONOS managed Nextcloud for WebDAV storage. We do NOT manage
+that host. We do NOT SSH into it. We cannot admin that box. It is a managed
+hosting product, not a VPS. The `stenographer.cloud` apex domain and
+`nextcloud.stenographer.cloud` point at 217.160.0.81 for the Nextcloud
+instance. All VPS subdomains (idp, traefik, vps1, whoami, etc.) point at
+31.70.75.165.
+
+### DNS records for IdP
+
+Both `idp` subdomains point at vps0 (31.70.75.165):
+
+| Record | Type | Value | TTL |
+|---|---|---|---|
+| idp.stenographer.cloud | A | 31.70.75.165 | 300 (5 min) |
+| idp.gitbackup.cloud | A | 31.70.75.165 | 300 (5 min) |
+
+These were initially created pointing at 217.160.0.81 (the managed Nextcloud
+IP) by mistake. They have been corrected to 31.70.75.165 (the actual VPS).
+
 ## Phase 0: Base system
 
 ```bash
