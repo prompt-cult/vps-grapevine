@@ -9,6 +9,38 @@ Trixie on IONOS Cloud Panel. The key differences:
   so Traefik runs rootless without CAP_NET_BIND_SERVICE
 - **No Docker daemon** — no `dockerd`, no `/var/run/docker.sock` attack surface
 
+## Host inventory — IPs and roles
+
+There is exactly one IONOS.de VPS. These are the only IPs in this project:
+
+| Host | IP | Provider | OS | Role |
+|---|---|---|---|---|
+| vps0 | REDACTED-ESTATE-IP | IONOS.de | Debian 13 Trixie | Production VPS (IdP, Traefik, vibe agent) |
+| vps1 | REDACTED-ESTATE-IP | Hostinger | Ubuntu 24.04 | Test box (stable, KVM2, larger) |
+| vps2 | REDACTED-ESTATE-IP | Hostinger | Ubuntu 24.04 | Burner/expiring (KVM1, smaller) |
+| Managed Nextcloud | REDACTED-ESTATE-IP | IONOS.de | Managed hosting | Nextcloud Enterprise (NOT a VPS — no SSH, no Docker, no admin access) |
+
+### Managed Nextcloud (REDACTED-ESTATE-IP)
+
+This project uses IONOS managed Nextcloud for WebDAV storage. We do NOT manage
+that host. We do NOT SSH into it. We cannot admin that box. It is a managed
+hosting product, not a VPS. The `stenographer.cloud` apex domain and
+`nextcloud.stenographer.cloud` point at REDACTED-ESTATE-IP for the Nextcloud
+instance. All VPS subdomains (idp, traefik, vps1, whoami, etc.) point at
+REDACTED-ESTATE-IP.
+
+### DNS records for IdP
+
+Both `idp` subdomains point at vps0 (REDACTED-ESTATE-IP):
+
+| Record | Type | Value | TTL |
+|---|---|---|---|
+| idp.stenographer.cloud | A | REDACTED-ESTATE-IP | 300 (5 min) |
+| idp.gitbackup.cloud | A | REDACTED-ESTATE-IP | 300 (5 min) |
+
+These were initially created pointing at REDACTED-ESTATE-IP (the managed Nextcloud
+IP) by mistake. They have been corrected to REDACTED-ESTATE-IP (the actual VPS).
+
 ## Phase 0: Base system
 
 ```bash
