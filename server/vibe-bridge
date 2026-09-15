@@ -30,6 +30,9 @@ Host commands (the script runs on the host):
   check-messages [--after TS]      print new inbox + outbox jsonl lines
   status / stop                    daemon control; status reports the version
 
+The agent profile is box-specific: set VPS_GRAPEVINE_AGENT in the unit or
+write the profile name to /opt/vps-grapevine/AGENT (default box-manager).
+
 The daemon: holds the flock (split-brain guard), watches inbox.jsonl, and for
 each new message runs one serialized `vibe -p` dispatch telling the agent to
 read the message + attachments, do the work, and write its reply to
@@ -53,7 +56,16 @@ from datetime import datetime, timezone
 
 VIBE = "/root/.local/bin/vibe"
 WORKDIR = "/root"
-AGENT = "box-manager"
+# Agent profile: env override, else /opt/vps-grapevine/AGENT, else box-manager.
+AGENT = (
+    os.environ.get("VPS_GRAPEVINE_AGENT")
+    or (
+        pathlib.Path("/opt/vps-grapevine/AGENT").read_text().strip()
+        if pathlib.Path("/opt/vps-grapevine/AGENT").exists()
+        else ""
+    )
+    or "box-manager"
+)
 # Mail path: env override wins; default matches the install dir.
 MAIL = pathlib.Path(os.environ.get("VPS_GRAPEVINE_MAIL", "/opt/vps-grapevine/mail"))
 INBOX = MAIL / "inbox.jsonl"
