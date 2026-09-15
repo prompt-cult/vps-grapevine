@@ -49,6 +49,10 @@ Clients are free to add any other `X-*` headers as metadata. The server
 should always parse all headers and check for ones it recognises. Unknown
 headers should be ignored (not cause errors).
 
+Note: the version protocol uses a **reserved top-level field** `_version`
+(not an `X-*` header) on the inbox JSONL record — see
+`server/BRIDGE-PROTOCOL.md`. Replies must end with a `[version] <ver>` line.
+
 ## Server Behaviour
 
 1. **Always parse headers** from incoming messages.

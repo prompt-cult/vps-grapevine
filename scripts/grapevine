@@ -28,10 +28,23 @@ from datetime import datetime
 
 SERVER_SCRIPT = "/opt/vps-grapevine/vibe-bridge"
 DROP_DIR = "/opt/vps-grapevine/drop-in"
+VERSION_FILE = "/opt/vps-grapevine/VERSION"
 
 
 def sh(*args: str, timeout: int = 120) -> subprocess.CompletedProcess:
     return subprocess.run(list(args), capture_output=True, text=True, timeout=timeout)
+
+
+def client_version() -> str:
+    here = pathlib.Path(__file__).resolve().parent.parent
+    try:
+        ver = subprocess.run(
+            ["git", "-C", str(here), "describe", "--tags", "--match", "20*", "--always"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout.strip()
+    except Exception:
+        ver = ""
+    return ver or "unknown"
 
 
 def srv() -> str:
@@ -66,6 +79,14 @@ def bootstrap() -> int:
              f"{srv()}:/opt/vps-grapevine/{name}"],
             check=True, timeout=120,
         )
+    # server version file: what the box is running (version protocol)
+    with pathlib.Path("/tmp/xxx/vps-grapevine-VERSION").open("w") as fh:
+        fh.write(client_version() + "\n")
+    subprocess.run(
+        ["scp", "-o", "BatchMode=yes", "/tmp/xxx/vps-grapevine-VERSION",
+         f"{srv()}:/opt/vps-grapevine/VERSION"],
+        check=True, timeout=60,
+    )
     script = r'''
 set -e
 chmod +x /opt/vps-grapevine/vibe-bridge
@@ -126,10 +147,10 @@ def send_message(text: str, attachments: list[str]) -> int:
             ["scp", "-o", "BatchMode=yes", f, f"{srv()}:{files_dir}/"],
             check=True, timeout=600,
         )
-    # 3) post the message
-    text_lines = text.replace("\\", "\\\\").replace("`", "\\`").replace('"', '\\"')
+    # 3) post the message (stamped with the client's version — version protocol)
     script = (
         f'/opt/vps-grapevine/vibe-bridge post-message {mid} client '
+        f'--version {client_version()} '
         f'"$(cat <<\'MSGEOF\'\n{text}\nMSGEOF\n)"'
     )
     result = ssh(script, timeout=60).strip()
