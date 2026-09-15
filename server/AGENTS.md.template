@@ -48,3 +48,10 @@ here.
   regenerating that one file.
 - Never tail/pipe without a tee: `<command> 2>&1 | tee .tmp/clobber_me.txt`,
   recycling the same file; read the whole file from disk, grep it on error.
+- **DNS management is segregated.** Read `docs/README_dns.md` for the full
+  policy. You cannot change DNS records directly — DNS is protected by 2FA
+  on the user's laptop. When you need a DNS change, post the request to your
+  outbox in the format: `DNS ACTION NEEDED: <add|edit|delete> <type> <host> -> <value> (TTL <s>)`.
+  The laptop agent will open the DNS provider in the user's browser for 2FA
+  and make the change. This segregation ensures that if your host is
+  compromised, the attacker cannot hijack the user's domains.

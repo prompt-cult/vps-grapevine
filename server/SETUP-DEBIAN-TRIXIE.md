@@ -184,6 +184,34 @@ IONOS VPS uses `ens6`.
 
 See `server/nftables/nftables-debian.conf` for the full ruleset.
 
+### CRITICAL: nftables safety rules
+
+`nft flush table` can cause catastrophic outages by carelessly dropping rules
+including SSH access. The following rules are mandatory for any agent or
+operator editing nftables on this host:
+
+1. **Take a dated backup before editing:**
+   ```
+   nft list ruleset > /root/nftables-backup-$(date +%Y%m%d-%H%M%S).conf
+   ```
+
+2. **All routine maintenance must be additive.** Add new rules; do not remove
+   or flush existing ones. If a rule must be changed, add the replacement first,
+   verify it works, then remove the old one — never flush the whole table.
+
+3. **Never call `nft flush table` without showing the user the edits are safe
+   and asking for permission.** The only exception is an emergency recovery:
+   if-and-only-if the user says the apps/site on the host are down and
+   explicitly orders you to flush to recover the system, you may back up,
+   edit, back up again, and then flush. Otherwise you must never flush.
+
+4. **Do not edit host firewall rules directly over SSH.** Ask the agent on the
+   host to make firewall changes. The agent on the host has the context and
+   can verify the rules are correct before applying them.
+
+5. **After editing, take a dated backup of the fixed config and diff the two.**
+   Only keep the backup of the fixed config — do not persist the broken one.
+
 ### Why DNAT to 127.0.0.1 and not `redirect to`?
 
 `redirect to :8080` changes the destination port but keeps the destination
