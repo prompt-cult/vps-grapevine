@@ -97,6 +97,11 @@ Protocol rules (full spec: `server/BRIDGE-PROTOCOL.md`):
    `/opt/vps-grapevine/VERSION`). Always check it: missing or older than
    the release you are running means the box has not upgraded — tell the
    User. `vibe-bridge status` prints `version: …` for a quick check.
+7. **Daemon restarts belong to the coordinator.** Never instruct the agent
+   to `systemctl restart vibed` mid-task: the restart kills its own
+   dispatch before the outbox line is written, and the daemon re-dispatches
+   the same message forever. If a daemon restart is needed, ask the agent
+   to write its reply first and note 'restart pending'.
 
 ## Rules the client must obey
 

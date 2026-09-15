@@ -199,6 +199,8 @@ def dispatch(mid: str) -> None:
         f"(read from {VERSION_FILE}; if the file disagrees with what you just "
         f"deployed, update the file first and stamp the new value). "
         f"If the incoming message carried an older _version than yours, say so in the reply. "
+        f"If the deployed vibe-bridge file is newer than the running daemon, do NOT restart "
+        f"the daemon (it would kill this dispatch) — write the reply first and note 'restart pending'. "
         f"Never print secrets in reply.md. "
         f"5) Append one line to {mail}/outbox.jsonl: "
         f'{{"uuid":"{mid}","ts":"<now iso>","path":"{OUTBOX_DIR}/{mid}"}} '
