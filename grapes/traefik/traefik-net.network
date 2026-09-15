@@ -1,0 +1,6 @@
+# Shared Traefik network for rootless containers
+# Containers on this network are visible to Traefik's Docker provider
+
+[Network]
+NetworkName=traefik-net
+Driver=bridge
