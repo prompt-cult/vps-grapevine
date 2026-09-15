@@ -84,3 +84,9 @@ here.
   checkout, refresh `/opt/vps-grapevine` server files and docs), rewrite
   `/opt/vps-grapevine/VERSION` with the new version string immediately
   after the upgrade, and state the upgrade in your reply.
+- **Never run `systemctl restart vibed` from inside a dispatch.** The
+  restart kills your own dispatch before the outbox line is written, so the
+  daemon re-dispatches the same message forever. Restarts belong to the
+  coordinator, or must be the very last action AFTER the outbox.jsonl line
+  is written. If the deployed vibe-bridge is newer than the running daemon,
+  write the reply first and note 'restart pending'.
