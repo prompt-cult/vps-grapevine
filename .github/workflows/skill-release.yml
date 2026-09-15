@@ -1,7 +1,7 @@
 name: skill-release
 on:
   push:
-    tags: ["20*-*-*"]
+    tags: ["20*-*"]
 permissions:
   contents: write
 jobs:
