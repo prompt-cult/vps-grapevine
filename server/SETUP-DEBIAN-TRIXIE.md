@@ -41,6 +41,9 @@ Both `idp` subdomains point at vps0 (REDACTED-ESTATE-IP):
 These were initially created pointing at REDACTED-ESTATE-IP (the managed Nextcloud
 IP) by mistake. They have been corrected to REDACTED-ESTATE-IP (the actual VPS).
 
+DNS records on this estate always carry TTL=600s as a hard requirement; every
+record change made on the ionos.de panel must keep TTL at 600, no exceptions.
+
 ## Phase 0: Base system
 
 ```bash
