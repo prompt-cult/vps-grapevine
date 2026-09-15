@@ -25,6 +25,8 @@ your mac ──ssh:22──▶ VPS ──▶ vibed.service (flock-guarded daemon
 | `server/BRIDGE-PROTOCOL.md` | server | the wire protocol spec |
 | `server/AGENTS.md.template` | server | the box policy the agent runs under (you fill in your own conventions) |
 | `docs/README_dns.md` | both | DNS management segregation of duties — VPS agents request DNS changes via outbox, laptop agent executes with user 2FA |
+| `docs/README_sev0_access_loss.md` | both | Catastrophic loss of SSH access — recovery via web console, commands to restore port 22 |
+| `docs/README_cloud_firewall.md` | both | Cloud firewall policies — two-layer model, typical default ports, locking down Plesk ports, loss of access checklist |
 
 This repo is a **template repository**: take a copy (do not fork), point
 `SRV_HOST` at your box, and bootstrap.

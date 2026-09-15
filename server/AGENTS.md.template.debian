@@ -60,3 +60,15 @@ here.
   The laptop agent will open the DNS provider in the user's browser for 2FA
   and make the change. This segregation ensures that if your host is
   compromised, the attacker cannot hijack the user's domains.
+- **If SSH access is lost, read `docs/README_sev0_access_loss.md` first.**
+  Loss of port 22 is a SEV0. The only recovery is the cloud provider's web
+  console. The laptop agent must log the user in, open the web console (new
+  tab — user may need to connect the browser automation extension), and
+  tell the user the exact commands to type. Pasting via automation likely
+  will not work due to WebSocket/VNC.
+- **Cloud firewall is separate from the host firewall.** Read
+  `docs/README_cloud_firewall.md`. The cloud provider's hardware firewall
+  sits in front of the VM. Both layers must allow a port. If the cloud
+  firewall blocks a port, no host-level fix helps. Typical Plesk ports
+  (8443, 8447) should be closed if not in use. The minimal set for a
+  Traefik setup is 22, 80, 443.
