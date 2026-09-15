@@ -27,6 +27,8 @@ your mac ──ssh:22──▶ VPS ──▶ vibed.service (flock-guarded daemon
 | `docs/README_dns.md` | both | DNS management segregation of duties — VPS agents request DNS changes via outbox, laptop agent executes with user 2FA |
 | `docs/README_sev0_access_loss.md` | both | Catastrophic loss of SSH access — recovery via web console, commands to restore port 22 |
 | `docs/README_cloud_firewall.md` | both | Cloud firewall policies — two-layer model, typical default ports, locking down Plesk ports, loss of access checklist |
+| `docs/README_model_info.md` | both | Model card protocol — JSON format, short info string, server/client setup steps |
+| `docs/README_headers_protocol.md` | both | Custom headers for mailbox messages — X-Info, X-Request-Info, X-Output-Format |
 
 This repo is a **template repository**: take a copy (do not fork), point
 `SRV_HOST` at your box, and bootstrap.
