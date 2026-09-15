@@ -56,6 +56,13 @@ This repo is a **template repository**: take a copy (do not fork), point
   with the user watching. See `docs/README_dns.md`. This ensures a compromised
   VPS cannot hijack the user's domains.
 
+## Releases
+
+The `SKILL.md` is version-stamped and attached to every GitHub release.
+To cut a release: `make tag` — it tags `YYYY.MM.DD-<short-sha>` (or
+`YYYY.MM.DD-dirty` if the tree is not clean) and pushes; CI appends the
+version footer to `SKILL.md` and attaches it to the release.
+
 ## Quick start
 
 See `SKILL.md`.
