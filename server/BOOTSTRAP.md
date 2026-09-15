@@ -108,3 +108,14 @@ normal `scripts/grapevine` flow takes over (see SKILL.md).
   only key to it and they expire. Never presign with `--expire >1h`.
 - If a presigned URL leaks before expiry: `mc share abort` revokes ALL
   presigned URLs for that alias.
+
+## Footnote: Debian vs Ubuntu
+
+This bootstrap flow is OS-agnostic — it only needs `curl` and a tarball.
+What differs by OS is what runs *after* it:
+
+- **Ubuntu 24.04/26.04**: Docker + ufw; see `SETUP-NOTES.md`.
+- **Debian 13 (Trixie)**: Podman Quadlet, rootless `apps` user, nftables
+  kernel port-redirect (no `CAP_NET_BIND_SERVICE`); see
+  `SETUP-DEBIAN-TRIXIE.md` and `nftables/nftables-debian.conf`, and use
+  `AGENTS.md.template.debian` as the box policy template.
