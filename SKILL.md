@@ -117,6 +117,11 @@ Protocol rules (full spec: `server/BRIDGE-PROTOCOL.md`):
 - **Cloud-specific naming.** Anything provider-specific goes in a file named
   after the provider's DNS suffix (`hstgr-cloud.sh`), imported by generic
   scripts, so a box can move providers by regenerating that one file.
+- **Agents never touch DNS.** Record creation/edits on the estate domain
+  (ionos.de panel) are client-lane only; an agent asks the client in a reply
+  and the client does the change. Every record change uses TTL=600s as a hard
+  requirement (see server/SETUP-DEBIAN-TRIXIE.md); if a panel offers no 600
+  option, ask the client — do not silently pick a different TTL.
 
 ## Leaving a box (offboarding)
 
