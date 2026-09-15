@@ -8,23 +8,27 @@ hostinger-manager vibe agent. Replaces the blocking v1 exchange: you post a
 message and get its uuid + timestamp back immediately; the agent works in the
 background and writes a reply into its outbox; you poll `check_messages`.
 
-Mail layout (all under /opt/vibe-bridge/mail/):
+Mail layout (all under /opt/vps-grapevine/mail/):
 
   inbox.jsonl                     one JSON per line:
-                                  {"uuid","ts","from","text","attachments":[{name,path}]}
+                                  {"uuid","ts","from","text","attachments":[{name,path}],"_version":"..."}
+                                  _version is optional: the client's deployed version
   inbox/{uuid}/files/...          message attachments, named server-side
   outbox.jsonl                    one JSON per line:
                                   {"uuid","ts","path"} - path names the reply
                                   file or folder to scp down
-  outbox/{uuid}/reply.md          the agent's reply (plus any artifacts)
+  outbox/{uuid}/reply.md          the agent's reply (plus any artifacts);
+                                  MUST end with `[version] <ver>` (see VERSION_FILE)
   state/processed.jsonl           daemon cursor: uuids already dispatched
+  /opt/vps-grapevine/VERSION      the deployed version the box is running
 
 Host commands (the script runs on the host):
   serve                            daemon loop (systemd vibed.service)
   new-id                           allocate {uuid} + inbox/{uuid}/files/
   post-message UUID FROM TEXT      append the inbox line, stamped with ts
+    [--version V]                  optional client _version field
   check-messages [--after TS]      print new inbox + outbox jsonl lines
-  status / stop                    daemon control
+  status / stop                    daemon control; status reports the version
 
 The daemon: holds the flock (split-brain guard), watches inbox.jsonl, and for
 each new message runs one serialized `vibe -p` dispatch telling the agent to
@@ -63,6 +67,7 @@ SOCKFILE = pathlib.Path("/run/vibed.sock")
 LOGFILE = pathlib.Path("/var/log/vibe-bridge.log")
 SESSIONFILE = pathlib.Path("/etc/vibe-bridge/session_id")
 SESSION_INDEX = pathlib.Path("/root/.vibe/logs/session/.session_index.json")
+VERSION_FILE = pathlib.Path(os.environ.get("VPS_GRAPEVINE_VERSION_FILE", "/opt/vps-grapevine/VERSION"))
 MAX_WAIT = 3600
 LOCK_HANDLE = None
 
@@ -108,7 +113,22 @@ def new_id() -> dict:
     return {"uuid": mid, "files_dir": f"{INBOX_DIR}/{mid}/files"}
 
 
-def post_message(mid: str, sender: str, text: str) -> dict:
+def server_version() -> str:
+    """The deployed version: /opt/vps-grapevine/VERSION, else git describe."""
+    if VERSION_FILE.exists():
+        ver = VERSION_FILE.read_text().strip()
+        if ver:
+            return ver
+    try:
+        return subprocess.run(
+            ["git", "describe", "--tags", "--match", "20*", "--always"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout.strip() or "unknown"
+    except Exception:
+        return "unknown"
+
+
+def post_message(mid: str, sender: str, text: str, version: str = "") -> dict:
     if not (INBOX_DIR / mid).is_dir():
         raise SystemExit(f"unknown message id {mid} — call new-id first")
     attachments = [
@@ -117,6 +137,8 @@ def post_message(mid: str, sender: str, text: str) -> dict:
     ] if (INBOX_DIR / mid / "files").is_dir() else []
     ts = now_iso()
     record = {"uuid": mid, "ts": ts, "from": sender, "text": text, "attachments": attachments}
+    if version:
+        record["_version"] = version
     with INBOX.open("a") as fh:
         fh.write(json.dumps(record, ensure_ascii=False) + "\n")
     return record
@@ -151,17 +173,24 @@ def check_messages(after: str) -> dict:
 
 def dispatch(mid: str) -> None:
     """One serialized vibe -p run that tells the agent to process message mid."""
+    mail = MAIL
     prompt = (
         f"You have a new message in the bridge mailbox, uuid {mid}. Steps: "
-        f"1) Read /opt/vibe-bridge/mail/inbox.jsonl - the line whose uuid is {mid} "
-        f"(it has the sender, text and attachment paths). "
-        f"2) Read the attachments under /opt/vibe-bridge/mail/inbox/{mid}/files/ if any. "
+        f"1) Read {mail}/inbox.jsonl - the line whose uuid is {mid} "
+        f"(it has the sender, text, optional _version the client is running, and attachment paths). "
+        f"2) Read the attachments under {mail}/inbox/{mid}/files/ if any. "
         f"3) Do the work it asks. "
-        f"4) Write your reply to /opt/vibe-bridge/mail/outbox/{mid}/reply.md and any "
-        f"other useful artifacts into /opt/vibe-bridge/mail/outbox/{mid}/. "
-        f"5) Append one line to /opt/vibe-bridge/mail/outbox.jsonl: "
-        f'{{"uuid":"{mid}","ts":"<now iso>","path":"/opt/vibe-bridge/mail/outbox/{mid}"}} '
-        f"(ts AFTER you finished writing the files). Never print secrets in reply.md. "
+        f"4) Write your reply to {mail}/outbox/{mid}/reply.md and any "
+        f"other useful artifacts into {mail}/outbox/{mid}/. "
+        f"VERSION PROTOCOL: the reply MUST end with one line "
+        f"`[version] {server_version()}` — the server version you are running "
+        f"(read from {VERSION_FILE}; if the file disagrees with what you just "
+        f"deployed, update the file first and stamp the new value). "
+        f"If the incoming message carried an older _version than yours, say so in the reply. "
+        f"Never print secrets in reply.md. "
+        f"5) Append one line to {mail}/outbox.jsonl: "
+        f'{{"uuid":"{mid}","ts":"<now iso>","path":"{OUTBOX_DIR}/{mid}"}} '
+        f"(ts AFTER you finished writing the files). "
         f"6) Your final stdout should be just a one-line ACK: processed {mid}."
     )
     cmd = [VIBE, "--yolo", "--agent", AGENT, "--trust", "--output", "text"]
@@ -264,7 +293,7 @@ def serve() -> int:
 
     inbox_size = INBOX.stat().st_size
     loop = 0
-    print(f"vibed v2 up (pid {os.getpid()}, session {pinned_session() or '(new)'}), mailbox at {MAIL}", flush=True)
+    print(f"vibed v2 up (pid {os.getpid()}, version {server_version()}, session {pinned_session() or '(new)'}), mailbox at {MAIL}", flush=True)
     while True:
         # drain inbox: on size change, and periodically to catch crashes
         try:
@@ -293,6 +322,7 @@ def serve() -> int:
                 conn.sendall(json.dumps({
                     "pid": os.getpid(),
                     "session": pinned_session(),
+                    "version": server_version(),
                     "processed": len(inbox_cursor()),
                 }).encode())
                 continue
@@ -331,10 +361,11 @@ def main() -> int:
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("serve")
     sub.add_parser("new-id")
-    post_p = sub.add_parser("post-message")
+    post_p =     sub.add_parser("post-message")
     post_p.add_argument("mid")
     post_p.add_argument("sender")
     post_p.add_argument("text")
+    post_p.add_argument("--version", default="")
     check_p = sub.add_parser("check-messages")
     check_p.add_argument("--after", default="")
     sub.add_parser("status")
@@ -347,7 +378,7 @@ def main() -> int:
         print(json.dumps(new_id()))
         return 0
     if args.cmd == "post-message":
-        print(json.dumps(post_message(args.mid, args.sender, args.text)))
+        print(json.dumps(post_message(args.mid, args.sender, args.text, args.version)))
         return 0
     if args.cmd == "check-messages":
         print(json.dumps(check_messages(args.after)))
@@ -359,6 +390,7 @@ def main() -> int:
             print(f"vibed: pid {pid} {'running' if alive else 'DEAD (stale pidfile)'}")
         else:
             print("vibed: not running")
+        print(f"version: {server_version()}")
         print(json.dumps(check_messages("")))
         return 0
     if args.cmd == "stop":

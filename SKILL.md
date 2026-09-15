@@ -88,6 +88,15 @@ Protocol rules (full spec: `server/BRIDGE-PROTOCOL.md`):
    lane (`from` == your client name) and never reply to other agents'
    messages.
 5. Replies may be a file or a folder; the outbox `path` tells you which.
+6. **Version protocol (mandatory).** Every message you send carries
+   `_version` = the version you are running. `scripts/grapevine
+   send_message` stamps it automatically from `git describe --tags` of this
+   checkout; if you post via `vibe-bridge post-message` directly, pass
+   `--version <ver>`. Every reply's `reply.md` MUST end with a line
+   `[version] <ver>` — the version the box is running (its deployed
+   `/opt/vps-grapevine/VERSION`). Always check it: missing or older than
+   the release you are running means the box has not upgraded — tell the
+   User. `vibe-bridge status` prints `version: …` for a quick check.
 
 ## Rules the client must obey
 

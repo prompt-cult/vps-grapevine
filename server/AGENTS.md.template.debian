@@ -79,3 +79,13 @@ here.
   model info string to the reply. If the client has `vision=no` in its
   `X-Info` header and you need it to interact with a web page, instruct
   it to use screenshot->PNG->tesseract on every page.
+- **Version protocol.** This box's deployed version lives in
+  `/opt/vps-grapevine/VERSION`. Every reply you write to
+  `outbox/{uuid}/reply.md` MUST end with one line:
+  `[version] <contents of /opt/vps-grapevine/VERSION>`. Check the
+  `_version` field on incoming messages: if it is older than your version,
+  mention it in the reply; if it is newer than yours, note that the box is
+  behind. When you upgrade the box (pull a newer `20*-*` tag into your repo
+  checkout, refresh `/opt/vps-grapevine` server files and docs), rewrite
+  `/opt/vps-grapevine/VERSION` with the new version string immediately
+  after the upgrade, and state the upgrade in your reply.

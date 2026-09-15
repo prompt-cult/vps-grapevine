@@ -3,16 +3,33 @@
 The vibe-bridge is now an async mailbox. No more blocking `send --wait`:
 post a message, get a uuid, keep working, poll for the reply.
 
-## Layout (host, /opt/vibe-bridge/mail/)
+## Layout (host, /opt/vps-grapevine/mail/)
 
 - `inbox.jsonl` — append-only. One JSON per line:
-  `{"uuid", "ts", "from", "text", "headers":{...}, "attachments":[{"name","path"}]}`
+  `{"uuid", "ts", "from", "text", "headers":{...}, "attachments":[{"name","path"}], "_version":"..."}`
   The `headers` field is optional. See `docs/README_headers_protocol.md`
   for standard headers (X-Info, X-Request-Info, X-Output-Format).
+  The `_version` field is optional: the version the client is running
+  (see the version protocol below).
 - `inbox/{uuid}/files/…` — attachments I pushed, named server-side
 - `outbox.jsonl` — append-only. One JSON per line:
   `{"uuid", "ts", "path"}` where `path` names the reply file/folder to scp down
 - `outbox/{uuid}/reply.md` — your reply text (plus any artifacts alongside)
+- `/opt/vps-grapevine/VERSION` — the version this box is running
+
+## Version protocol
+
+- The **client** stamps every message with `_version` = the version it is
+  running (`scripts/grapevine send_message` does this automatically from
+  `git describe --tags` of its checkout; if you post via `vibe-bridge
+  post-message` yourself, pass `--version <ver>`).
+- The **server** keeps its deployed version in `/opt/vps-grapevine/VERSION`
+  (written at bootstrap, rewritten whenever the box pulls a newer tag).
+  Every reply `reply.md` MUST end with one line:
+  `[version] <contents of /opt/vps-grapevine/VERSION>`
+- The client checks that line on every reply. A missing or older `[version]`
+  means the box has not been upgraded — surface that to the User.
+- `vibe-bridge status` prints `version: …` for a quick machine check.
 
 ## Your side (hostinger-manager agent)
 
@@ -22,7 +39,8 @@ When the daemon wakes you for message `{uuid}`:
    `inbox/{uuid}/files/`.
 2. Do the work.
 3. Write `outbox/{uuid}/reply.md` (plus artifacts in that folder). Never put
-   secrets in reply.md.
+   secrets in reply.md. The reply MUST end with one line:
+   `[version] <ver>` — the contents of `/opt/vps-grapevine/VERSION`.
 4. Append to `outbox.jsonl`:
    `{"uuid":"<uuid>","ts":"<iso ts>","path":"/opt/vibe-bridge/mail/outbox/<uuid>"}`
    — the `ts` must be written AFTER the reply files are complete.
@@ -35,7 +53,8 @@ daemon dispatch itself); never reply to other agents' messages.
 ## Operator side (the User's agents over SSH)
 
 - `vibe-bridge new-id` → `{uuid, files_dir}`; scp attachments there
-- `vibe-bridge post-message <uuid> <from> "<text>"` → stamps ts, appends inbox
+- `vibe-bridge post-message <uuid> <from> "<text>" [--version <ver>]` →
+  stamps ts, appends inbox (pass `--version` per the version protocol)
 - `vibe-bridge check-messages --after <ts>` → `{now, inbox[], outbox[]}`:
   your new inbox messages and any agent replies newer than `after`; scp down
   the reply `path` when present.
