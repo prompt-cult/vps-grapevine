@@ -24,6 +24,11 @@ your mac ──ssh:22──▶ VPS ──▶ vibed.service (flock-guarded daemon
 | `server/vibe-bridge` | server | the daemon + mailbox script (uv PEP 723, stdlib only) |
 | `server/BRIDGE-PROTOCOL.md` | server | the wire protocol spec |
 | `server/AGENTS.md.template` | server | the box policy the agent runs under (you fill in your own conventions) |
+| `server/SETUP-NOTES.md` | server | fresh-box bootstrap notes for Ubuntu 24.04/26.04 |
+| `***SCRUBBED***` | server | Debian 13 (Trixie) remix: Podman Quadlet, rootless, nftables redirect, IONOS |
+| `server/AGENTS.md.template.debian` | server | Debian/Podman variant of the box policy |
+| `server/BOOTSTRAP.md` | server | presign bucket bootstrap: laptop presigns, fresh box curls (OS-agnostic) |
+| `grapes/` | server | optional containers: Forgejo, Traefik, Zitadel + OpenResty rate-limit sidecar |
 | `docs/README_dns.md` | both | DNS management segregation of duties — VPS agents request DNS changes via outbox, laptop agent executes with user 2FA |
 | `docs/README_sev0_access_loss.md` | both | Catastrophic loss of SSH access — recovery via web console, commands to restore port 22 |
 | `docs/README_cloud_firewall.md` | both | Cloud firewall policies — two-layer model, typical default ports, locking down Plesk ports, loss of access checklist |
@@ -32,6 +37,14 @@ your mac ──ssh:22──▶ VPS ──▶ vibed.service (flock-guarded daemon
 
 This repo is a **template repository**: take a copy (do not fork), point
 `SRV_HOST` at your box, and bootstrap.
+
+**OS footnotes.** Ubuntu 24.04/26.04 boxes follow `server/BOOTSTRAP.md` +
+`server/SETUP-NOTES.md` (Docker, ufw). Debian 13 (Trixie) boxes follow
+`***SCRUBBED***` instead: Podman Quadlet instead of Docker,
+rootless `apps` user, nftables kernel port-redirect instead of
+`CAP_NET_BIND_SERVICE`, and `server/AGENTS.md.template.debian` as the box
+policy. The `BOOTSTRAP.md` presign flow itself is OS-agnostic — only the
+container/firewall layer differs.
 
 ## Design rules
 
