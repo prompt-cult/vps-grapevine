@@ -1,3 +1,25 @@
+---
+name: vps-grapevine
+description: >-
+  Drive an autonomous coding agent that lives on a rented VPS, over plain SSH.
+  Use this skill when the user asks to bootstrap an agent on a fresh box, or to
+  send work to / read replies from a box that already runs the grapevine.
+license: CC0-1.0
+version: "1.0.0"
+author: simbo1905
+tags:
+  - vps
+  - grapevine
+  - ssh
+  - agent
+  - mailbox
+allowed-tools:
+  - Bash
+metadata:
+  homepage: https://github.com/simbo1905/vps-grapevine
+  source: https://github.com/simbo1905/vps-grapevine
+---
+
 # Skill: vps-grapevine
 
 Drive an autonomous coding agent that lives on a rented VPS, over plain SSH.
@@ -70,11 +92,11 @@ Protocol rules (full spec: `server/BRIDGE-PROTOCOL.md`):
 ## Rules the client must obey
 
 - **Never raw tail or pipe.** Redirect to a clobber file and read it:
-  `<cmd> 2>&1 | tee .tmp/clobber_me.txt` — recycle the same file; grep it on
+  `<command> 2>&1 | tee .tmp/clobber_me.txt` — recycle the same file; grep it on
   error instead of re-running.
 - **Announce edits.** If you push/scp files to the box yourself, tell the
   agent ("FYI I have edited/pushed, please check and ack"). It pushes back
-  only for material conflicts with other projects on that host.
+  only for material issues that conflict with other projects on that host.
 - **No system surprises.** The agent owns the box day-to-day; system-level
   installs are its call and must be stated. You do not reboot it — it will
   say so if a reboot is needed.

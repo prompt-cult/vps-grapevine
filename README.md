@@ -46,6 +46,13 @@ This repo is a **template repository**: take a copy (do not fork), point
 - **Honest failure.** No hidden fallbacks, no fake results; if the daemon or
   the agent is down, the client says so.
 
+## Releases
+
+The `SKILL.md` is version-stamped and attached to every GitHub release.
+To cut a release: `make tag` — it tags `YYYY.MM.DD-<short-sha>` (or
+`YYYY.MM.DD-dirty` if the tree is not clean) and pushes; CI appends the
+version footer to `SKILL.md` and attaches it to the release.
+
 ## Quick start
 
 See `SKILL.md`.
