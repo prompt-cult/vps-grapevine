@@ -6,7 +6,9 @@ post a message, get a uuid, keep working, poll for the reply.
 ## Layout (host, /opt/vibe-bridge/mail/)
 
 - `inbox.jsonl` — append-only. One JSON per line:
-  `{"uuid", "ts", "from", "text", "attachments":[{"name","path"}]}`
+  `{"uuid", "ts", "from", "text", "headers":{...}, "attachments":[{"name","path"}]}`
+  The `headers` field is optional. See `docs/README_headers_protocol.md`
+  for standard headers (X-Info, X-Request-Info, X-Output-Format).
 - `inbox/{uuid}/files/…` — attachments I pushed, named server-side
 - `outbox.jsonl` — append-only. One JSON per line:
   `{"uuid", "ts", "path"}` where `path` names the reply file/folder to scp down

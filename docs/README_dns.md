@@ -87,3 +87,21 @@ Laptop agent confirms change in reply to VPS agent
 4. Upload the navigation documentation to all VPS hosts so they can
    include accurate details in future requests.
 5. All changes must be additive and verified (dig/nslookup after change).
+
+## Vision-Capability-Aware DNS Instructions
+
+When the server agent needs the laptop agent to interact with the DNS
+provider's web panel, it should check the client's `X-Info` header for
+vision capability. If the client has `vision=no` (no vision modality), the
+server MUST include instructions in the outbox reply telling the client to:
+
+1. Use screenshot -> PNG at full scale -> tesseract on every page to "see"
+   what is on screen before attempting any DOM reads or writes.
+2. This ensures the agent can detect errors, toast notifications, page
+   state, and button labels that DOM queries may miss.
+3. Never attempt to click or fill forms on a page without first "seeing"
+   it via screenshot -> tesseract.
+
+This applies to all web panel interactions, not just DNS — any time a
+non-vision agent needs to interact with a web UI, it should use the
+screenshot -> tesseract method as its primary way of "seeing" the page.
