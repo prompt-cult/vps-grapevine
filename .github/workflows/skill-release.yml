@@ -1,0 +1,23 @@
+name: skill-release
+on:
+  push:
+    tags: ["20*-*-*"]
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build skill with version footer
+        run: |
+          mkdir -p dist
+          cp SKILL.md dist/SKILL.md
+          printf '\n---\nversion: %s\n' "${GITHUB_REF_NAME}" >> dist/SKILL.md
+      - name: Create release and attach skill
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dist/SKILL.md \
+            --title "vps-grapevine skill ${GITHUB_REF_NAME}" \
+            --notes "Skill kit built from tag ${GITHUB_REF_NAME}. Version stamped at the bottom of SKILL.md."
