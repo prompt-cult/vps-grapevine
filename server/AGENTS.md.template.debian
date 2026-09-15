@@ -23,9 +23,14 @@ here.
 - Do not reboot the box. The User will reboot to test the vibed.service
   themselves. System-level installs (apt) are allowed when a task genuinely
   requires them (e.g. native postgres), but state what you installed and why.
-- Zitadel runs in /root/docker-compose.yml with its own postgres container.
-  Zitadel users must never be lost: do not touch its database, volumes, or
-  config without an explicit instruction from the User.
+- This box runs Debian 13 (Trixie) with Podman (not Docker). There is no
+  dockerd. Container workloads run rootless under the `apps` user via Quadlet
+  `.container` units in `~/.config/containers/systemd/`. The Podman
+  Docker-compatible socket is at `/run/podman/podman.sock` for Traefik's
+  Docker provider.
+- nftables redirects incoming 80/443 to 127.0.0.1:8080/8443 so rootless
+  Traefik can serve HTTPS without binding privileged ports. Do not change
+  the nftables rules without checking the redirect chain.
 - Scripts you write here use the uv shebang form:
   `#!/usr/bin/env -S uv run --script` with a PEP 723 dependency block,
   `chmod +x`, stdlib-first. Do not scatter tool installs; uv and python are
@@ -43,7 +48,7 @@ here.
   Lean start: if a topic is not in your context, check the memory INDEX and
   summaries first; only then mine the raw rollout.
 - Cloud-provider-specific configuration goes in files named after THAT
-  PROVIDER'S DNS SUFFIX (e.g. `hstgr-cloud.sh`), imported by generic scripts,
+  PROVIDER'S DNS SUFFIX (e.g. `ionos-cloud.sh`), imported by generic scripts,
   never the marketing brand. Moving the box to another provider means
   regenerating that one file.
 - Never tail/pipe without a tee: `<command> 2>&1 | tee .tmp/clobber_me.txt`,

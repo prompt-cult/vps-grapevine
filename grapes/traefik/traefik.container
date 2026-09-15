@@ -1,0 +1,29 @@
+# Traefik rootless container — Quadlet unit for the apps user
+# Listens on 127.0.0.1:8080/8443; nftables redirects 80/443 to these ports.
+# Uses the Podman Docker-compatible socket for label-based routing.
+
+[Container]
+Image=docker.io/traefik:v3.7
+ContainerName=traefik
+# Bind only to loopback — nftables handles the port translation
+PublishPort=127.0.0.1:8080:8080
+PublishPort=127.0.0.1:8443:8443
+# Mount the Podman socket so Traefik's Docker provider can read container labels
+Volume=/run/user/1000/podman/podman.sock:/var/run/docker.sock:z
+# Mount Traefik static config
+Volume=/home/apps/config/traefik/traefik.yml:/etc/traefik/traefik.yml:ro,Z
+# Mount data dir for acme.json, logs
+Volume=/home/apps/data/traefik:/data:Z
+# Network
+Network=traefik-net.network
+# No dashboard exposed to the internet.
+# Access the dashboard via SSH port forwarding if needed:
+#   ssh -L 8080:127.0.0.1:8080 root@***SCRUBBED***
+# Then visit http://localhost:8080/dashboard/
+
+[Service]
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

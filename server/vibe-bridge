@@ -49,7 +49,7 @@ from datetime import datetime, timezone
 
 VIBE = "/root/.local/bin/vibe"
 WORKDIR = "/root"
-AGENT = "hostinger-manager"
+AGENT = "box-manager"
 # Mail path: env override wins; default matches the install dir.
 MAIL = pathlib.Path(os.environ.get("VPS_GRAPEVINE_MAIL", "/opt/vps-grapevine/mail"))
 INBOX = MAIL / "inbox.jsonl"
@@ -178,6 +178,9 @@ def dispatch(mid: str) -> None:
         + (f" err={result.stderr.strip()[-300:]}" if result.returncode != 0 else ""))
 
 
+IN_FLIGHT: set = set()
+
+
 def worker(mid: str, sem: threading.Semaphore) -> None:
     with sem:
         try:
@@ -199,7 +202,7 @@ def worker(mid: str, sem: threading.Semaphore) -> None:
                 pass
         finally:
             mark_processed(mid)
-            in_flight.discard(mid)
+            IN_FLIGHT.discard(mid)
 
 
 def inbox_cursor() -> set:
@@ -253,13 +256,12 @@ def serve() -> int:
         for line in read_jsonl(INBOX):
             rec = json.loads(line)
             mid = rec["uuid"]
-            if mid in outbox_ids or mid in in_flight:
+            if mid in outbox_ids or mid in IN_FLIGHT:
                 continue
-            in_flight.add(mid)
+            IN_FLIGHT.add(mid)
             log(f"[{mid}] in from {rec.get('from')}: {rec.get('text', '')[:160]}")
             threading.Thread(target=worker, args=(mid, sem), daemon=True).start()
 
-    in_flight: set = set()
     inbox_size = INBOX.stat().st_size
     loop = 0
     print(f"vibed v2 up (pid {os.getpid()}, session {pinned_session() or '(new)'}), mailbox at {MAIL}", flush=True)
