@@ -126,6 +126,24 @@ Protocol rules (full spec: `server/BRIDGE-PROTOCOL.md`):
   every record they set and checks the services resolve and answer. A change
   is not done until the 60-second re-check passes.
 
+## Secrecy law (git-veil)
+
+- **Nothing confidential enters git unsealed.** No IPs, provider hostnames,
+  keys, or estate details in any committed file — only git-veil ciphertext
+  (`.secret`) is committed; the plaintext names are gitignored. A violation
+  is purged from history (filter-repo) and anything exposed is rotated.
+- **Every agent runs its own age identity**, named `<role>@<box-fqdn>`
+  (e.g. `box-manager@vps2.stenographer.cloud`; consult/act roles:
+  `consult+tag@<fqdn>`, `act+tag@<fqdn>`). The `AGE-SECRET-KEY` never
+  leaves its box (0600) and never travels the mailbox; only the `age1`
+  public recipient is sent, and it must be signed into `.git-veil/keyring`
+  (each machine pins trust with the committed `owner.verifying`).
+- **Canary proof.** The repo carries `.git-veil-canary.txt.secret`. An
+  agent's key setup is not done until `git-veil cat .git-veil-canary.txt`
+  succeeds on its box and it reports the canary content back.
+- **Inventories and setup docs are sealed files** (git-veil tracked). To
+  work on them: `reveal`, edit, `hide`, commit only the ciphertext.
+
 ## Leaving a box (offboarding)
 
 When a box leaves the estate: stop the daemon, remove provider-specific files,

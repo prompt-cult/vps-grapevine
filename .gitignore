@@ -5,3 +5,4 @@ __pycache__/
 server/SETUP-DEBIAN-TRIXIE.md
 grapes/zitadel/SKILL.md
 server/SETUP-NOTES.md
+.git-veil-canary.txt
