@@ -1,9 +1,9 @@
 ---
 name: vps-grapevine
 description: >-
-  Drive an autonomous coding agent that lives on a rented VPS, over plain SSH.
-  Use this skill when the user asks to bootstrap an agent on a fresh box, or to
-  send work to / read replies from a box that already runs the grapevine.
+  Drive an autonomous coding agent on a VPS, over plain SSH. Use this skill
+  when the user asks to bootstrap an agent on a fresh box, or to send work
+  to / read replies from a box that already runs the grapevine.
 license: CC0-1.0
 version: "1.0.0"
 author: simbo1905
@@ -20,11 +20,7 @@ metadata:
   source: https://github.com/simbo1905/vps-grapevine
 ---
 
-# Skill: vps-grapevine
-
-Drive an autonomous coding agent that lives on a rented VPS, over plain SSH.
-Use this skill when the user asks to bootstrap an agent on a fresh box, or to
-send work to / read replies from a box that already runs the grapevine.
+# vps-grapevine
 
 ## Vocabulary
 
@@ -38,10 +34,8 @@ send work to / read replies from a box that already runs the grapevine.
 ## Prerequisites
 
 - SSH root access to the VPS (password or key)
-- On the box: Ubuntu 22.04/24.04 LTS, `uv` (snap or standalone), `tmux` is
-  NOT required (headless by design), `docker` optional
-- The Mistral Vibe CLI installed on the box (`uv tool install mistral-vibe`
-  — npm does not carry it), with an API key configured once via `vibe --setup`
+- On the box: a Debian-family OS with `apt`; `uv` (snap or standalone);
+  `docker` optional
 - Environment: `SRV_HOST` set (e.g. `root@srv012345.example.hstgr.cloud`)
 
 ## Bootstrap (cold VPS)
@@ -134,6 +128,6 @@ Protocol rules (full spec: `server/BRIDGE-PROTOCOL.md`):
 
 ## Leaving a box (offboarding)
 
-When a rented box expires: stop the daemon, remove provider-specific files,
+When a box leaves the estate: stop the daemon, remove provider-specific files,
 and encrypt every agent key/config with the user's chosen secret-encryption
 tool (e.g. git-veil) so keys are never left plaintext on a dead box.
