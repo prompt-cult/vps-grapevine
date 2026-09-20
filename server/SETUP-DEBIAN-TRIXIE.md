@@ -41,8 +41,11 @@ Both `idp` subdomains point at vps0 (REDACTED-ESTATE-IP):
 These were initially created pointing at REDACTED-ESTATE-IP (the managed Nextcloud
 IP) by mistake. They have been corrected to REDACTED-ESTATE-IP (the actual VPS).
 
-DNS records on this estate always carry TTL=600s as a hard requirement; every
-record change made on the ionos.de panel must keep TTL at 600, no exceptions.
+DNS records on this estate always carry TTL=60s; every record change made on
+the ionos.de panel must set TTL to 60 seconds, no exceptions. Low TTL is
+deliberate: a wrong record fails fast and is corrected within a minute
+instead of lingering in caches. After any DNS change, wait 60 seconds,
+re-read every record touched, and verify the services resolve and answer.
 
 ## Phase 0: Base system
 
