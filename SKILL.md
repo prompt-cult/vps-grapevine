@@ -117,11 +117,20 @@ Protocol rules (full spec: `server/BRIDGE-PROTOCOL.md`):
 - **Cloud-specific naming.** Anything provider-specific goes in a file named
   after the provider's DNS suffix (`hstgr-cloud.sh`), imported by generic
   scripts, so a box can move providers by regenerating that one file.
-- **Agents never touch DNS.** Record creation/edits on the estate domain
-  (ionos.de panel) are client-lane only; an agent asks the client in a reply
-  and the client does the change. Every record change uses TTL=600s as a hard
-  requirement (see server/SETUP-DEBIAN-TRIXIE.md); if a panel offers no 600
-  option, ask the client — do not silently pick a different TTL.
+- **DNS is client-lane.** Record creation/edits on the estate domain
+  (ionos.de panel) are done by the client — which may drive the panel via
+  browser automation under the user's own login (never entering credentials
+  itself); an agent asks the client in a reply.
+- **TTL law: 60 seconds on every record, no exceptions.** A low TTL means a
+  wrong record fails fast and is fixed within a minute; a long TTL lets an
+  error sit in caches and blow legs off long after the mistake. If a panel
+  offers no 60 option, ask the client — do not silently pick a higher TTL.
+- **Cross-check rule.** If any agent edited DNS, the other agents must verify
+  the records afterwards: an isolated edit nobody re-checked is presumed
+  wrong until confirmed.
+- **Touch-then-verify rule.** Whoever touches DNS sleeps 60, then re-reads
+  every record they set and checks the services resolve and answer. A change
+  is not done until the 60-second re-check passes.
 
 ## Leaving a box (offboarding)
 
