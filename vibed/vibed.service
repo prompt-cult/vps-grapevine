@@ -4,5 +4,7 @@ Description=vibed
 ExecStart=/usr/local/bin/vibed
 Restart=always
 Environment=TERM=dumb
+Environment=VIBED_STATE=/var/lib/vibed/session_id
+RuntimeDirectory=vibed
 [Install]
 WantedBy=multi-user.target

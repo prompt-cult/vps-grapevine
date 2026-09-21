@@ -13,3 +13,4 @@ path = "src/cli.rs"
 
 [dependencies]
 serde_json = "1"
+libc = "0.2"
