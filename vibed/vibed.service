@@ -3,8 +3,11 @@ Description=vibed
 [Service]
 ExecStart=/usr/local/bin/vibed
 Restart=always
+RestartSec=5
 Environment=TERM=dumb
 Environment=VIBED_STATE=/var/lib/vibed/session_id
+Environment=VIBED_SOCK=/run/vibed/vibed.sock
+Environment=VIBED_LOCK=/run/vibed/vibed.lock
 RuntimeDirectory=vibed
 [Install]
 WantedBy=multi-user.target

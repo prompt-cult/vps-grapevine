@@ -24,11 +24,36 @@ struct Acp {
     session_id: Option<String>,
 }
 
-/// Shared daemon state: the live ACP channel (None while the child is down)
-/// and the respawn count.
+/// Shared daemon state: the live ACP channel (None while the child is down).
 struct Shared {
     acp: Option<Acp>,
+}
+
+/// Lock-free status snapshot: updated by the supervisor and the push path,
+/// read by `status` without ever touching the Acp mutex.
+#[derive(Default)]
+struct Snapshot {
+    up: bool,
+    session: Option<String>,
     restarts: u64,
+    busy: bool,
+    busy_since: Option<Instant>,
+}
+
+impl Snapshot {
+    fn busy_since_secs(&self) -> Option<u64> {
+        self.busy_since.map(|t| t.elapsed().as_secs())
+    }
+
+    fn set_busy(&mut self, busy: bool) {
+        self.busy = busy;
+        self.busy_since = if busy { Some(Instant::now()) } else { None };
+    }
+
+    fn set_lifecycle(&mut self, up: bool, session: Option<String>) {
+        self.up = up;
+        self.session = session;
+    }
 }
 
 fn fatal(msg: &str) -> ! {
@@ -197,7 +222,18 @@ fn handshake(acp: &mut Acp, io_dead: &AtomicBool) -> Result<(), String> {
                 eprintln!("vibed: session/load ok");
                 return Ok(());
             }
-            Err(e) => eprintln!("vibed: session/load failed: {e}; falling back to session/new"),
+            Err(e) => {
+                eprintln!(
+                    "PIN_LOST: session/load failed: {e}; refusing to boot on a blank session — human ack required"
+                );
+                let path = session_state_path();
+                let bak = PathBuf::from(format!("{}.{}.bak", path.display(), saved));
+                if let Err(be) = std::fs::write(&bak, &saved) {
+                    eprintln!("vibed: write backup {}: {be}", bak.display());
+                }
+                persist_session_id(&saved);
+                std::process::exit(3);
+            }
         }
     }
     let cwd = std::env::var("VIBED_WORKDIR").unwrap_or_else(|_| "/root".to_string());
@@ -215,10 +251,17 @@ fn handshake(acp: &mut Acp, io_dead: &AtomicBool) -> Result<(), String> {
 
 /// Supervisor: owns the child lifecycle. spawn -> handshake -> serve until the
 /// child exits, stdout EOFs or ACP I/O fails; then teardown, backoff, respawn.
-fn supervise(state: Arc<Mutex<Shared>>, io_dead: Arc<AtomicBool>) {
+fn supervise(
+    state: Arc<Mutex<Shared>>,
+    snap: Arc<Mutex<Snapshot>>,
+    io_dead: Arc<AtomicBool>,
+) {
     let mut backoff = BACKOFF_START;
     loop {
         io_dead.store(false, Ordering::SeqCst);
+        snap.lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .set_lifecycle(false, None);
         let mut child = match Command::new("vibe-acp")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -233,13 +276,18 @@ fn supervise(state: Arc<Mutex<Shared>>, io_dead: Arc<AtomicBool>) {
             eprintln!("vibed: handshake failed: {e}");
             let _ = child.kill();
             let _ = child.wait();
-            state.lock().unwrap_or_else(|p| p.into_inner()).restarts += 1;
+            snap.lock().unwrap_or_else(|p| p.into_inner()).restarts += 1;
             eprintln!("vibed: vibe-acp respawn in {backoff}s");
             std::thread::sleep(Duration::from_secs(backoff));
             backoff = (backoff * 2).min(BACKOFF_MAX);
             continue;
         }
+        let sid = acp.session_id.clone();
         state.lock().unwrap_or_else(|p| p.into_inner()).acp = Some(acp);
+        {
+            let mut s = snap.lock().unwrap_or_else(|p| p.into_inner());
+            s.set_lifecycle(true, sid);
+        }
         eprintln!("vibed: session ready");
         let up_since = Instant::now();
         let reason = loop {
@@ -258,10 +306,11 @@ fn supervise(state: Arc<Mutex<Shared>>, io_dead: Arc<AtomicBool>) {
         };
         eprintln!("vibed: {reason}");
         // Teardown child state: drop the pipes, make sure the process is gone.
+        state.lock().unwrap_or_else(|p| p.into_inner()).acp = None;
         {
-            let mut sh = state.lock().unwrap_or_else(|p| p.into_inner());
-            sh.acp = None;
-            sh.restarts += 1;
+            let mut s = snap.lock().unwrap_or_else(|p| p.into_inner());
+            s.set_lifecycle(false, None);
+            s.restarts += 1;
         }
         let _ = child.kill();
         let _ = child.wait();
@@ -271,26 +320,46 @@ fn supervise(state: Arc<Mutex<Shared>>, io_dead: Arc<AtomicBool>) {
     }
 }
 
-fn dispatch(state: &Arc<Mutex<Shared>>, io_dead: &AtomicBool, v: Value) -> Value {
+fn dispatch(
+    state: &Arc<Mutex<Shared>>,
+    snap: &Arc<Mutex<Snapshot>>,
+    io_dead: &AtomicBool,
+    v: Value,
+) -> Value {
     match v.get("op").and_then(|o| o.as_str()) {
         Some("status") => {
-            let sh = state.lock().unwrap_or_else(|p| p.into_inner());
-            let session = sh.acp.as_ref().and_then(|a| a.session_id.clone());
-            json!({"ok":true,"up":sh.acp.is_some(),"session":session,"restarts":sh.restarts})
+            // Reads ONLY the snapshot: never blocks behind a long-running push.
+            let s = snap.lock().unwrap_or_else(|p| p.into_inner());
+            json!({
+                "ok": true,
+                "up": s.up,
+                "session": s.session,
+                "restarts": s.restarts,
+                "busy": s.busy,
+                "busy_since_secs": s.busy_since_secs(),
+            })
         }
         Some("push") => {
             let Some(text) = v.get("prompt").and_then(|p| p.as_str()) else {
                 return json!({"ok":false,"error":"missing prompt"});
             };
-            let mut sh = state.lock().unwrap_or_else(|p| p.into_inner());
-            let Some(acp) = sh.acp.as_mut() else {
-                return json!({"ok":false,"error":"session not ready (child restarting)"});
-            };
-            let Some(sid) = acp.session_id.clone() else {
-                return json!({"ok":false,"error":"session not ready (child restarting)"});
-            };
-            let params = json!({"sessionId":sid,"prompt":[{"type":"text","text":text}]});
-            match acp.call("session/prompt", params, io_dead) {
+            snap.lock().unwrap_or_else(|p| p.into_inner()).set_busy(true);
+            // Single-in-flight law: the Acp mutex is held for the whole turn.
+            let res: Result<Value, String> = (|| {
+                let mut sh = state.lock().unwrap_or_else(|p| p.into_inner());
+                let Some(acp) = sh.acp.as_mut() else {
+                    return Err("session not ready (child restarting)".to_string());
+                };
+                let Some(sid) = acp.session_id.clone() else {
+                    return Err("session not ready (child restarting)".to_string());
+                };
+                let params = json!({"sessionId":sid,"prompt":[{"type":"text","text":text}]});
+                acp.call("session/prompt", params, io_dead)
+            })();
+            snap.lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .set_busy(false);
+            match res {
                 // Any completed session/prompt response is ok; stopReason passes
                 // through regardless of value.
                 Ok(res) => json!({"ok":true,"stopReason":res.get("stopReason").cloned().unwrap_or(Value::Null)}),
@@ -319,7 +388,12 @@ fn read_line_capped<R: BufRead>(r: &mut R) -> std::io::Result<Option<Vec<u8>>> {
     Ok(Some(buf))
 }
 
-fn handle_conn(state: &Arc<Mutex<Shared>>, io_dead: &AtomicBool, stream: UnixStream) {
+fn handle_conn(
+    state: &Arc<Mutex<Shared>>,
+    snap: &Arc<Mutex<Snapshot>>,
+    io_dead: &AtomicBool,
+    stream: UnixStream,
+) {
     let mut reader = match stream.try_clone() {
         Ok(r) => BufReader::new(r),
         Err(_) => return,
@@ -337,7 +411,7 @@ fn handle_conn(state: &Arc<Mutex<Shared>>, io_dead: &AtomicBool, stream: UnixStr
             continue;
         }
         let reply = match serde_json::from_str::<Value>(trimmed) {
-            Ok(v) => dispatch(state, io_dead, v),
+            Ok(v) => dispatch(state, snap, io_dead, v),
             Err(_) => json!({"ok":false,"error":"bad json"}),
         };
         let mut out = reply.to_string().into_bytes();
@@ -376,20 +450,59 @@ fn main() {
     eprintln!("vibed listening on {sock}");
 
     let io_dead = Arc::new(AtomicBool::new(false));
-    let state = Arc::new(Mutex::new(Shared {
-        acp: None,
-        restarts: 0,
-    }));
+    let state = Arc::new(Mutex::new(Shared { acp: None }));
+    let snap = Arc::new(Mutex::new(Snapshot::default()));
     {
         let st = Arc::clone(&state);
+        let sp = Arc::clone(&snap);
         let d = Arc::clone(&io_dead);
-        std::thread::spawn(move || supervise(st, d));
+        std::thread::spawn(move || supervise(st, sp, d));
     }
     for stream in listener.incoming() {
         if let Ok(s) = stream {
             let st = Arc::clone(&state);
+            let sp = Arc::clone(&snap);
             let d = Arc::clone(&io_dead);
-            std::thread::spawn(move || handle_conn(&st, &d, s));
+            std::thread::spawn(move || handle_conn(&st, &sp, &d, s));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn snapshot_defaults_are_down_and_idle() {
+        let s = Snapshot::default();
+        assert!(!s.up);
+        assert!(s.session.is_none());
+        assert_eq!(s.restarts, 0);
+        assert!(!s.busy);
+        assert!(s.busy_since_secs().is_none());
+    }
+
+    #[test]
+    fn snapshot_busy_window_round_trips() {
+        let mut s = Snapshot::default();
+        s.set_busy(true);
+        assert!(s.busy);
+        assert!(s.busy_since.is_some());
+        assert!(s.busy_since_secs().unwrap() < 60);
+        s.set_busy(false);
+        assert!(!s.busy);
+        assert!(s.busy_since.is_none());
+        assert!(s.busy_since_secs().is_none());
+    }
+
+    #[test]
+    fn snapshot_lifecycle_updates_up_and_session() {
+        let mut s = Snapshot::default();
+        s.set_lifecycle(true, Some("sid-1".to_string()));
+        assert!(s.up);
+        assert_eq!(s.session.as_deref(), Some("sid-1"));
+        s.set_lifecycle(false, None);
+        assert!(!s.up);
+        assert!(s.session.is_none());
     }
 }
