@@ -1,0 +1,3 @@
+[submodule "reference/mistral-vibe"]
+	path = reference/mistral-vibe
+	url = https://github.com/mistralai/mistral-vibe
