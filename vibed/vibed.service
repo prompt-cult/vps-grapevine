@@ -1,0 +1,8 @@
+[Unit]
+Description=vibed
+[Service]
+ExecStart=/usr/local/bin/vibed
+Restart=always
+Environment=TERM=dumb
+[Install]
+WantedBy=multi-user.target
