@@ -148,6 +148,72 @@ Protocol rules (full spec: `server/BRIDGE-PROTOCOL.md`):
 - **Inventories and setup docs are sealed files** (git-veil tracked). To
   work on them: `reveal`, edit, `hide`, commit only the ciphertext.
 
+## Markdown-Driven Development (MDD)
+
+- **The repo is the source of truth for desired state.** Public docs in
+  the repo describe how any box should be set up: proxy router, vibe config,
+  vibed transport, total-recall, profiles. A box reads the docs, compares
+  against its current state, and self-migrates. You tell a box "check new
+  desired state and self-migrate" — it pulls, diffs, and applies.
+- **Anything that describes host setup or estate specifics goes into
+  git-veil** (sealed). The canary file (`.git-veil-canary.txt`) is the
+  single sealed file for estate inventory, host IPs, key locations, profile
+  configs, and proxy settings. It grows; the name is anonymous. Stale
+  sealed files are pruned down to just the canary.
+- **Anything that improves config, conventions, or process goes into
+  public files** (plain Markdown in the repo, tracked and tagged). These
+  are the instructions any new box follows. They are tagged and released
+  as we go — not forgotten until later.
+- **Pin the session so the agent keeps its memory.** The vibed durable
+  session (pinned id in `/var/lib/vibed/session_id`) is the agent's
+  history, memory, and settings. A pinned session means the agent knows
+  what it has done and what is configured — it does not have amnesia every
+  dispatch. Losing the pin is a loud failure (PIN_LOST), never a silent
+  re-boot into a blank session.
+
+## Proxy router (keyless harness)
+
+- **The harness carries no API key.** A loopback proxy router
+  (`codex-proxy-router` on `127.0.0.1:9090`) routes by path prefix to
+  hardened translating proxies that hold keys in `mlock(2)` memory. The
+  harness sends requests to the router; the router forwards to the
+  matching child proxy; the child injects the key upstream.
+- **Two providers, two path prefixes.** `/opencode.ai/...` routes to the
+  OpenCode proxy (Go endpoint for free models like `glm-5.3-flash`);
+  `/mistral.ai/...` routes to the Mistral proxy (paid models like
+  `mistral-large-latest`). Adding a provider is one registry entry.
+- **Keys never touch the harness.** The proxy env file
+  (`/root/.secrets/proxy-router.env`, mode 600) is loaded by systemd
+  `EnvironmentFile=`. The router sanitizes child environments to an
+  allow-list; the harness process never sees any key.
+- **Install:** download the release tarball from the codex repo, verify
+  the sha256, install the three binaries to `/usr/local/bin/`, create the
+  systemd service, create the env file, enable and start. Full steps in
+  `docs/README_proxy_vibed_setup.md`.
+
+## vibed (persistent ACP harness)
+
+- **Three layers, one owner per session:**
+  `scripts/grapevine` (client, SSH) -> `vibe-bridge` (mailbox front) ->
+  `vibed` (Rust daemon, transport + supervision) -> `vibe-acp` (stock
+  agent). The bridge's only change from the old harness is dispatch:
+  `subprocess.run(vibe -p --resume ...)` becomes `vibed-cli push` over a
+  unix socket.
+- **One durable session.** vibed holds one pinned session id, persisted on
+  disk at `/var/lib/vibed/session_id`. On boot it runs `initialize` ->
+  `session/load <pinned id>`. The session is the agent's memory — it
+  recalls earlier instructions across process death and compaction.
+- **No second opener.** Exactly one process may have the pinned session
+  open. vibed is that process (flock-guarded). The vibe shim intercepts
+  `--resume <pinned-id>` and forwards over the socket; it refuses if
+  vibed is down — never falls back to a direct resume.
+- **Model config law.** Every model the box uses gets an explicit
+  `[[models]]` entry in `~/.vibe/config.toml`. Never rely on
+  experiment-injected models. After any model config change, grep the
+  vibe log for `falling back` — that line is the oracle.
+- **Install and acceptance:** see `docs/README_proxy_vibed_setup.md` and
+  `server/VIBED-ACP.md` (in git history at commit 3f23be6).
+
 ## Tag law (releases)
 
 - **Tags are immutable history. You never delete a tag — you bump.** A new
