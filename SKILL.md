@@ -148,6 +148,17 @@ Protocol rules (full spec: `server/BRIDGE-PROTOCOL.md`):
 - **Inventories and setup docs are sealed files** (git-veil tracked). To
   work on them: `reveal`, edit, `hide`, commit only the ciphertext.
 
+## Tag law (releases)
+
+- **Tags are immutable history. You never delete a tag — you bump.** A new
+  state on `main` is a new tag (`<YYYY.MM.DD>-<short-sha>` on the merged
+  head). Deleting a tag rewrites history that `git describe --tags` has
+  already stamped into versioned messages and deployed `VERSION` files;
+  a deleted tag can never be recalled reliably once anyone fetched.
+- **Release objects are disposable.** Exactly one release exists at a
+  time, marked Latest, on the newest tag. When you release again, kill
+  the old release objects — the tags they pointed at stay forever.
+
 ## Leaving a box (offboarding)
 
 When a box leaves the estate: stop the daemon, remove provider-specific files,
