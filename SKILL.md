@@ -159,6 +159,26 @@ Protocol rules (full spec: `server/BRIDGE-PROTOCOL.md`):
   time, marked Latest, on the newest tag. When you release again, kill
   the old release objects — the tags they pointed at stay forever.
 
+## Tooling law (estate tools)
+
+We are vps-grapevine; this section binds the estate, not the tools.
+
+- **Prebuilt tagged releases only.** Estate tools (git-veil,
+  total-recall, the codex proxies, …) are installed on a box as the
+  prebuilt binary from the tool's tagged GitHub release
+  (`gh release download <tag> --pattern '*linux-x86_64*'` and friends) —
+  never built from source on a box. Source builds are the upstream
+  projects' business; a box that compiles its own tools has silently
+  diverged. (Compiling is for developing the tool itself, in its own
+  checkout, on a dev box.)
+- **Boxes stay in sync.** Every box runs the same tagged release of each
+  estate tool. `--version` on any box must name the current release tag;
+  a mismatch is a bug on that box — upgrade it to the tag, do not
+  downgrade the estate.
+- **We document here.** The estate's habits are recorded in this repo
+  and never pushed onto the upstream tools' own docs — the tools are
+  agnostic; vps-grapevine is where "we" is defined.
+
 ## Leaving a box (offboarding)
 
 When a box leaves the estate: stop the daemon, remove provider-specific files,
