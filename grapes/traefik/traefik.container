@@ -18,7 +18,7 @@ Volume=/home/apps/data/traefik:/data:Z
 Network=traefik-net.network
 # No dashboard exposed to the internet.
 # Access the dashboard via SSH port forwarding if needed:
-#   ssh -L 8080:127.0.0.1:8080 root@***SCRUBBED***
+#   ssh -L 8080:127.0.0.1:8080 root@vps01.example.com
 # Then visit http://localhost:8080/dashboard/
 
 [Service]

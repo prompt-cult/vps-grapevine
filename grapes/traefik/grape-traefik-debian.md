@@ -39,12 +39,12 @@ systemctl --user status whoami
 # Traefik responds on loopback
 curl -sI http://127.0.0.1:8080/
 
-# Whoami through Traefik (needs DNS for ***SCRUBBED***)
-curl -sk https://***SCRUBBED***/
+# Whoami through Traefik (needs DNS for whoami.vps01.example.com)
+curl -sk https://whoami.vps01.example.com/
 
 # Dashboard is NOT exposed to the internet.
 # Access it via SSH port forwarding only:
-#   ssh -L 8080:127.0.0.1:8080 root@***SCRUBBED***
+#   ssh -L 8080:127.0.0.1:8080 root@vps01.example.com
 # Then visit http://localhost:8080/dashboard/
 ```
 
@@ -69,11 +69,11 @@ podman rm -f traefik whoami 2>/dev/null
 - `acme.json` must be mode 600 (`chmod 600 ~/data/traefik/acme.json`).
 - **SECURITY: The Traefik dashboard must NEVER be exposed to the internet.**
   An earlier version of this grape exposed the dashboard on
-  `traefik.***SCRUBBED***` with basic auth `admin/admin` — that is
+  `traefik.vps01.example.com` with basic auth `admin/admin` — that is
   a trivially guessable credential on a public-facing admin panel. The
   dashboard labels have been removed from the Quadlet unit and `api.dashboard`
   is set to `false` in the static config. If you need the dashboard, use SSH
-  port forwarding: `ssh -L 8080:127.0.0.1:8080 root@***SCRUBBED***`
+  port forwarding: `ssh -L 8080:127.0.0.1:8080 root@vps01.example.com`
   then visit `http://localhost:8080/dashboard/`.
 - Let's Encrypt HTTP challenge uses the http entryPoint (port 8080 via
   nftables redirect). DNS must resolve for ACME to work.
