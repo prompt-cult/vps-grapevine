@@ -179,6 +179,31 @@ We are vps-grapevine; this section binds the estate, not the tools.
   and never pushed onto the upstream tools' own docs — the tools are
   agnostic; vps-grapevine is where "we" is defined.
 
+## Setup law (markdown-driven development)
+
+The repo is the desired state. Docs first, boxes converge.
+
+- **Docs are the desired state.** How any new box gets set up — bootstrap,
+  daemon, proxies, profiles, model config — is documented in this repo as
+  markdown. A box never invents its own procedure: it checks the docs
+  as-at-now and self-migrates to the new desired state (pull, diff,
+  apply, verify). When a box is asked to "check new desired state", the
+  docs in the latest release are what it checks against.
+- **Docs match as-at-now, always.** Whenever you do setup or sync work
+  on a box, check the docs match what you actually did — if not, update
+  them in the same breath. A doc that lags reality is a bug in the doc.
+- **Host-specific goes into git-veil.** Anything about setting up and
+  syncing hosts — IPs, providers, host inventory, proxy keys/config,
+  vibe profile/role config, model config — is estate-confidential and
+  lives in git-veil sealed files; the public file names stay anonymous
+  (e.g. one sealed canary-style file).
+- **Conventions go into public files.** Anything that improves config and
+  conventions — laws, naming, procedures — goes into the public files in
+  this repo, is tagged and released as we go, never stockpiled and
+  forgotten until later. The release stream *is* the memory of what
+  changed; a box pins its session so it knows this history instead of
+  having amnesia every dispatch.
+
 ## Leaving a box (offboarding)
 
 When a box leaves the estate: stop the daemon, remove provider-specific files,
