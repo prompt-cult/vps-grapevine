@@ -132,9 +132,13 @@ Protocol rules (full spec: `server/BRIDGE-PROTOCOL.md`):
   keys, or estate details in any committed file — only git-veil ciphertext
   (`.secret`) is committed; the plaintext names are gitignored. A violation
   is purged from history (filter-repo) and anything exposed is rotated.
-- **Every agent runs its own age identity**, named `<role>@<box-fqdn>`
-  (e.g. `box-manager@vps2.stenographer.cloud`; consult/act roles:
-  `consult+tag@<fqdn>`, `act+tag@<fqdn>`). The `AGE-SECRET-KEY` never
+- **Every box runs one age identity**, named `<host-label>@<domain>`
+  (e.g. `vps01@example.com` for the box `vps01.example.com`): the identity
+  names the box's single root security context. Model profiles
+  (thinking/fast/…) are dispatch config, never age identities. A scoped
+  identity `consult+tag@<fqdn>` / `act+tag@<fqdn>` is only created when a
+  box gains a genuinely separate security context (separate OS user,
+  rootless container, read-only consult agent). The `AGE-SECRET-KEY` never
   leaves its box (0600) and never travels the mailbox; only the `age1`
   public recipient is sent, and it must be signed into `.git-veil/keyring`
   (each machine pins trust with the committed `owner.verifying`).
