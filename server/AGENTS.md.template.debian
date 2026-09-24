@@ -110,3 +110,36 @@ runs here.
   6. When in doubt about a sealed file: decrypt by hand with
      `age -d -i <identity-file>` — that is ground truth, git-veil reveal
      output is not (it may skip/skip-overwrite existing plaintext).
+
+## Git is head-office mail, not the truth — the box is stateful
+
+- The remote git checkout of vps-grapevine is a means of EXCHANGE between
+  boxes. It is error-prone (merge whiplash, a user rolling state back), so
+  it is never the source of truth for this box's health.
+- The host keeps its own state: backups, long-term memory, and local git
+  state where useful (not everything needs pushing).
+- Agent profiles and setup docs live in this repo (setup docs public,
+  personal settings sealed). Regularly: `git pull`, `git-veil reveal`, and
+  MERGE those files into this box's local long-term memory. The local
+  memory is the box's working brain; git is the message.
+- REGRESSION TRIPWIRE: if the latest state looks like a regression and the
+  decision log (sealed) has NO dated entry authorizing that u-turn, treat
+  it as suspect: check `git log` for the offending change, do not silently
+  adopt it, and FLAG THE CONCERN to the User.
+
+## Agent roles (recommended setup)
+
+Set up three primary agents so fresh sessions start ready to execute, and
+make the worker the serve-time default:
+
+- worker  : fast hands-on executor — the `default_agent` in
+  `~/.config/opencode/opencode.jsonc` so a restart lands here
+- planner : plans and decomposes work
+- thinker : deep reasoning for hard problems
+
+Use the team's preferred provider/model for each role; the exact choices
+are unit-specific and live in the sealed setup snapshot + decision log in
+this repo (pull frequently, `git-veil reveal` locally, and merge into the
+box's own long-term memory — see the stateful-box law above). Changes to
+the locked roles go through the decision log with a dated entry; do not
+switch providers/models by muscle memory mid-flight.
