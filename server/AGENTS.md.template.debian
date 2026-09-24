@@ -81,3 +81,32 @@ runs here.
   session.** The restart kills your own session mid-flight and the work is
   lost. Restarts belong to the coordinator, or must be the very last
   action AFTER results are reported and recorded.
+
+## Ops law: backup, trust, verify, crosscheck (+ merge rules)
+
+- **Backup, trust, verify, crosscheck — in that order, every time.**
+  - BACKUP: run the box's backup sweep BEFORE risky work and AGAIN at the
+    end. No backup = no work.
+  - TRUST: after any git-veil repo change (pull/push/clone), run
+    `git-veil verify-keyring` and `git-veil list-keys` before touching
+    sealed files; pin owner keys with `git-veil trust <repo-id> <keyfile>`.
+  - VERIFY: don't trust tools blindly — verify ground truth (age -d decrypt
+    of a sealed file, endpoint handshake, database state check) before
+    acting.
+  - CROSSCHECK: diff BOTH sides of any merge; check the other box's state
+    before claiming work is done or missing.
+- **Merge rules for diverged box lines (vpsX boxes all push to origin):**
+  1. `git tag pre-<change>` + branch the local state BEFORE any merge/rebase.
+  2. Make a worktree of the tagged state and `git-veil reveal` there — that
+     is the salvage copy of our plaintexts.
+  3. On main, rebase origin/main; for SEALED .secret conflicts take THEIRS
+     on the rebase (their version), then merge the PLAINTEXTS manually:
+     reveal main's, diff against the worktree's reveal, UNION the sections
+     (our changes are always additive — never drop the other box's work).
+  4. REBASE GOTCHA: in a rebase, `--theirs` is the commit being rebased
+     (OURS), `--ours` is origin. Do not trust muscle memory; check the
+     .secret byte size against `git show <origin-sha>:<path>` after.
+  5. `git-veil hide` (re-encrypts to the full current keyring), commit, push.
+  6. When in doubt about a sealed file: decrypt by hand with
+     `age -d -i <identity-file>` — that is ground truth, git-veil reveal
+     output is not (it may skip/skip-overwrite existing plaintext).
