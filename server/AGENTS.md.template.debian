@@ -43,10 +43,11 @@ runs here.
   never auto-commit box-local files there); box workload (cron'd tooling,
   mailbox archive, patched tools) lives outside it, e.g. /opt/box-tools.
 - Long-term memory: the box memory file (dated sections, e.g.
-  /root/.vibe/memory/box-state.md) is THE memory — keep it current. Mine
-  history with total-recall (`--harness vibe` for old rollouts,
-  `--harness opencode` for opencode sessions); always redirect big outputs
-  to a file and grep — never into context raw.
+  /root/.memory/box-state.md) is THE memory — keep it current. Mine
+  session history with total-recall (`--harness opencode`) and compact
+  with the Mercury tool at compaction time — MUST-USE before context is
+  lost. Always redirect big outputs to a file and grep — never into
+  context raw.
 - Cloud-provider-specific configuration goes in files named after THAT
   PROVIDER'S DNS SUFFIX (e.g. `ionos-cloud.sh`), imported by generic scripts,
   never the marketing brand. Moving the box to another provider means
