@@ -57,7 +57,7 @@ Terminal 2 (console):
 Sessions persist server-side in the opencode db, so reconnect + attach
 resumes. Run `opencode attach --mini` for a minimal interface.
 
-## What is in this repo
+## What is on this grapevine? 
 
 | Path | Purpose |
 |---|---|
