@@ -1,13 +1,16 @@
 # vps-grapevine
 
-Run opencode on a rented VPS and drive it from your mac over a plain SSH
-tunnel — the service binds loopback only, so nothing new faces the
-internet.
+Run opencode on a rented VPS (or anything that is Linux) and drive it from your laptop over an SSH
+tunnel—the service binds to loopback only, so nothing new faces the internet, and nftables drop as belt-and-braces.
 
 ```
 your mac ──ssh:22──▶ VPS ──▶ opencode-serve.service (127.0.0.1:4096)
         ◀── forwarded 4096 ──┘   opencode attach http://127.0.0.1:4096
 ```
+
+The idea is to use the stock cloud image with the stock cloud firewall and basic backups, plus security updates and nearby affordances like weekly backups. If you want to do old-school EC2 or bare metal, you do you! 
+
+On top of that, we have vines and grapes for setting up Traefik and Docker Compose.  
 
 ## Official install path
 
