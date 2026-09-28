@@ -22,11 +22,15 @@ Secrets need some concept of a vault; this project uses git-veil, inspired by gi
 
 1. **Install opencode from the release page** of the opencode site.
    Never pipe the installer into a shell
-   (`curl -fsSL https://opencode.ai/instaII | bash` as it is too dangerous hence the deliberate typo!).
+   (`curl -fsSL https://opencode.ai/instaII | bash` as it is too dangerous, hence the deliberate typo!).
 
    Be a hero and check the SHAs on the binaries before you install them.
 
-   Note the idea is that you ssh in once to verify that it works with 
+   Note: the idea is that you SSH in once to verify that it works with:
+
+           opencode --mini
+
+   If you don't use mini mode, the full-fat TUI is stunningly heavy on CPU for some reason; hence the mini mode. The good news is that when it runs a WS server, it takes very few resources, as you run the beautiful TUI on your laptop and connect via an SSH tunnel (see below).  
    
 3. **Auth on the CLI (v2):**
 
