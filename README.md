@@ -26,20 +26,25 @@ The idea here is that all the user-facing code is in docker. The underlying box 
    The v1 command `opencode console login` did not work — use the v2
    command above. Then run `/models` and select a model.
 
+   You **must** set up quota and keys, ideally a key per host and the like, to ensure it does not eat your wallet. 
+
 ## Box setup (after installing opencode)
 
-The unit lives at `server/opencode-serve.service.ubuntu`. Install it on
+The unit lives at locations such as `server/opencode-serve.service.ubuntu` which is a service to run 
+`opencode serve` to bind websockets to localhost. Install it on
 the box (root):
 
-    install -m 644 opencode-serve.service.ubuntu /etc/systemd/system/opencode-serve.service
+    install -m 644 opencode-serve.service.${distro} /etc/systemd/system/opencode-serve.service
     systemctl daemon-reload
     systemctl enable --now opencode-serve.service
 
-It binds `127.0.0.1:4096` only — nothing on the public interface; the
-cloud firewall keeps 22/80/443 and nothing else opens. Auth is direct
+Note that means it starts by default; if you want to turn that off on prod, you can. 
+
+It binds `127.0.0.1:4096` only — nothing on the public interface; configure any 
+cloud firewall for openssl letsencrypt on 22/80/443, and nothing else opens. Auth is direct
 (v2 auth above); no proxy legs, no daemon, no ACP.
 
-## Attach from the mac
+## Attach from your laptop
 
 Terminal 1 (tunnel):
 
