@@ -8,9 +8,11 @@ your mac ──ssh:22──▶ VPS ──▶ opencode-serve.service (127.0.0.1:4
         ◀── forwarded 4096 ──┘   opencode attach http://127.0.0.1:4096
 ```
 
-The idea is to use the stock cloud image with the stock cloud firewall and basic backups, plus security updates and nearby affordances like weekly backups. If you want to do old-school EC2 or bare metal, you do you! 
+The idea is to use the stock cloud image with the stock cloud firewall and basic backups, plus security updates and nearby affordances like weekly backups. If you want old-school EC2 or bare metal, do you! 
 
 On top of that, we have vines and grapes for setting up Traefik and Docker Compose.  
+
+The idea here is that all the user-facing code is in docker. The underlying box is only visible over port 22. The host has no userland. This means I use old-school big-boys rules to run as root. That relies upon backups. 
 
 ## Official install path
 
