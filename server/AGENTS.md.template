@@ -73,6 +73,10 @@ runs here.
   pipe the value straight into the consuming command (variable or stdin).
   Never commit plaintext credentials, never echo them into output or
   agent context, never leave decrypted copies on disk.
+  Before a vault reveal replaces a runtime secret: TEST the new value
+  live first (auth probe / endpoint check). The runtime copy is the working
+  state and stays recoverable until proven; never clobber a working env
+  location with an untested reveal.
 - **Secrets law.** .env and key files are 600, never committed, never
   printed. Report locations, not values. MCP/API keys for the agent live
   in /root/.profile (never inside systemd services — drop them into
