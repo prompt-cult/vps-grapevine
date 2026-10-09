@@ -143,3 +143,15 @@ this repo (pull frequently, `git-veil reveal` locally, and merge into the
 box's own long-term memory — see the stateful-box law above). Changes to
 the locked roles go through the decision log with a dated entry; do not
 switch providers/models by muscle memory mid-flight.
+
+## Trunk dev — one reality per host (law)
+
+- NO double sources of truth. NO multiple clones. NO multiple git
+  worktrees. NO "feature branches". A host has only ONE reality, so all
+  estate-repo work is TRUNK DEV: exactly ONE official checkout per box,
+  main is the trunk, every commit lands on it.
+- Never create a second clone or worktree of the estate repo on a box.
+  Work in the one official checkout (vps2: /vps-grapevine). If you FIND a
+  stray clone/worktree/copy on your box: preserve it (branch + tag +
+  bundle into backups), reconcile its unpushed commits into main, then
+  remove it — and record the removal in the decision log.
