@@ -1,0 +1,6 @@
+# postgresql.x.conf.j2 — per-host rendered fragment of postgresql.conf
+# Render target: the listen_addresses line of /etc/postgresql/<v>/main/postgresql.conf
+# The rendered values (actual interfaces) are estate-private and live only
+# in the sealed server/SETUP-NOTES.md table. NEVER render '*' or a wildcard:
+# no service listens on an internet-facing interface, ever.
+listen_addresses = '{{ postgres_listen_interfaces }}'
