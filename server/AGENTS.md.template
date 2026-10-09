@@ -17,6 +17,15 @@ runs here.
 - Pinned model: glm-5.3 (the 1M-context model) via the opencode providers
   (auth.json). If the model is ever wrong, fix it back before doing
   anything else.
+- DURABLE-CONFIG LAW: no reboot, no "done". A host config change (systemd
+  unit/drop-in, boot ordering) is NOT closed until it survives a reboot and
+  the verify battery is green after boot — PLUS external verification
+  (public endpoints, browser path via the User's Mac agent where one
+  exists: listed user lands, unlisted user 403s). In-session restarts
+  prove nothing about boot durability. Agents never reboot; the User
+  reboots. Record the reboot-proof obligation in the decision log BEFORE
+  asking for the reboot. YOUR /root/AGENTS.md MUST carry this rule — if it
+  does not, add it there before touching host config.
 - Do not reboot the box. The User reboots to test survival themselves.
   System-level installs (apt) are allowed when a task genuinely requires
   them (e.g. native postgres), but state what you installed and why.
