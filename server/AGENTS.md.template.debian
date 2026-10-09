@@ -78,6 +78,11 @@ runs here.
   `docs/README_cloud_firewall.md`. The cloud provider's hardware firewall
   sits in front of the VM. Both layers must allow a port. The minimal set
   for a Traefik setup is 22, 80, 443.
+- **Passwords and secrets are git-veil sealed.** Every password, key, and
+  token lives only in a git-veil sealed store; reveal it transiently and
+  pipe the value straight into the consuming command (variable or stdin).
+  Never commit plaintext credentials, never echo them into output or
+  agent context, never leave decrypted copies on disk.
 - **Secrets law.** .env and key files are 600, never committed, never
   printed. Report locations, not values. MCP/API keys for the agent live
   in /root/.profile (never inside systemd services — drop them into
