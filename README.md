@@ -1,81 +1,91 @@
 # vps-grapevine
 
-Talk to an autonomous coding agent that lives on a VPS, over plain SSH —
-no extra ports, no TUI scraping, no concurrency. The agent is a Mistral Vibe
-harness (any model you configure it with) run headless by a systemd daemon
-that owns a mailbox; your local CLI posts JSONL messages with attachments
-into its inbox and polls its outbox for replies.
+How about your host has a demon thats a LLM running on French Cloud in French Data Centers like 
 
-The name: messages vine out from your machine to boxes you rent, and each box
-grows its own grape (agent) on the vine. One client, many vines.
+Run opencode on a rented VPS (or anything that is Linux) and drive it from your laptop over an SSH
+tunnel—the service binds to loopback only, so nothing new faces the internet, and nftables drop as belt-and-braces.
 
 ```
-your mac ──ssh:22──▶ VPS ──▶ vibed.service (flock-guarded daemon)
-                              └─▶ vibe -p (serialized, stateful sessions)
-                                    └─▶ /opt/vps-grapevine/mail/ (inbox/outbox)
+your mac ──ssh:22──▶ VPS ──▶ opencode-serve.service (127.0.0.1:4096)
+        ◀── forwarded 4096 ──┘   opencode attach http://127.0.0.1:4096
 ```
 
-## What is in this repo
+The idea is to use the stock cloud image with the stock cloud firewall and basic backups, plus security updates and nearby affordances like weekly backups. If you want old-school EC2 or bare metal, you do you! 
 
-| Path | Side | Purpose |
-|---|---|---|
-| `SKILL.md` | client | the installable skill: how to bootstrap a fresh VPS and exchange messages |
-| `scripts/grapevine` | client | the CLI: `send_message` / `check_messages` / `status` / `stop`, over plain ssh |
-| `server/vibe-bridge` | server | the daemon + mailbox script (uv PEP 723, stdlib only) |
-| `server/BRIDGE-PROTOCOL.md` | server | the wire protocol spec |
-| `server/AGENTS.md.template` | server | the box policy the agent runs under (you fill in your own conventions) |
-| `server/SETUP-NOTES.md` | server | fresh-box bootstrap notes for Ubuntu 24.04/26.04 |
-| `server/SETUP-DEBIAN-TRIXIE.md` | server | Debian 13 (Trixie) remix: Podman Quadlet, rootless, nftables redirect, IONOS |
-| `server/AGENTS.md.template.debian` | server | Debian/Podman variant of the box policy |
-| `server/BOOTSTRAP.md` | server | presign bucket bootstrap: laptop presigns, fresh box curls (OS-agnostic) |
-| `grapes/` | server | optional containers: Forgejo, Traefik, Zitadel + OpenResty rate-limit sidecar |
-| `docs/README_dns.md` | both | DNS management segregation of duties — VPS agents request DNS changes via outbox, laptop agent executes with user 2FA |
-| `docs/README_sev0_access_loss.md` | both | Catastrophic loss of SSH access — recovery via web console, commands to restore port 22 |
-| `docs/README_cloud_firewall.md` | both | Cloud firewall policies — two-layer model, typical default ports, locking down Plesk ports, loss of access checklist |
-| `docs/README_model_info.md` | both | Model card protocol — JSON format, short info string, server/client setup steps |
-| `docs/README_headers_protocol.md` | both | Custom headers for mailbox messages — X-Info, X-Request-Info, X-Output-Format |
+On top of that, we have vines and grapes for setting up Traefik and Docker Compose.  
 
-This repo is a **template repository**: take a copy (do not fork), point
-`SRV_HOST` at your box, and bootstrap.
+The idea here is that all the user-facing code is in docker. The underlying box is only visible over port 22. The host has no userland. This means I use old-school big-boys rules to run as root; the sandbox IS the VPS. That relies on backups, DNS, and the like, with no secrets on any host that let it control anything beyond the docker images on the host. 
 
-**OS footnotes.** Ubuntu 24.04/26.04 boxes follow `server/BOOTSTRAP.md` +
-`server/SETUP-NOTES.md` (Docker, ufw). Debian 13 (Trixie) boxes follow
-`server/SETUP-DEBIAN-TRIXIE.md` instead: Podman Quadlet instead of Docker,
-rootless `apps` user, nftables kernel port-redirect instead of
-`CAP_NET_BIND_SERVICE`, and `server/AGENTS.md.template.debian` as the box
-policy. The `BOOTSTRAP.md` presign flow itself is OS-agnostic — only the
-container/firewall layer differs.
+Secrets need some concept of a vault; this project uses git-veil, inspired by git-secret but using `age` for encryption. The idea is you use this repo as a template to make your own logic environment dev|test|prod where there is a set of shared secrets of the resources used by the servers in the environment. 
 
-## Design rules
+## Official install path
 
-- **SSH only.** Everything rides port 22. The daemon exposes nothing to the
-  network; its unix socket is root-only.
-- **One agent per box.** A flock + pidfile is the split-brain guard. The
-  agent refuses to run twice, and refuses `vibe -p` from anything but the
-  daemon.
-- **Async mailbox, never blocking.** `send_message` returns a uuid +
-  timestamp instantly; the agent works in the background; you poll
-  `check_messages --after <ts>` for replies. Replies are files you scp down.
-- **Stateful.** The daemon pins the agent's session id; every dispatch
-  resumes it, so the agent accumulates box knowledge across messages.
-- **Cloud-agnostic.** Anything specific to a hosting provider lives in files
-  named after *that provider's DNS suffix* (e.g. `hstgr-cloud.sh`), never the
-  marketing brand. The generic scripts never mention a provider.
-- **Honest failure.** No hidden fallbacks, no fake results; if the daemon or
-  the agent is down, the client says so.
-- **DNS segregation.** DNS is protected by 2FA on the user's laptop, never on
-  a VPS. VPS agents request DNS changes via the outbox; the laptop agent opens
-  the DNS provider in the user's browser for 2FA and makes additive changes
-  with the user watching. See `docs/README_dns.md`. This ensures a compromised
-  VPS cannot hijack the user's domains.
+1. **Install opencode from the release page** of the opencode site.
+   Never pipe the installer into a shell
+   (`curl -fsSL https://opencode.ai/instaII | bash` as it is too dangerous, hence the deliberate typo!).
+
+   Be a hero and check the SHAs on the binaries before you install them.
+
+   Note: the idea is that you SSH in once to verify that it works with:
+
+           opencode --mini
+
+   If you don't use mini mode, the full-fat TUI is stunningly heavy on CPU for some reason; hence the mini mode. The good news is that when it runs a WS server, it takes very few resources, as you run the beautiful TUI on your laptop and connect via an SSH tunnel (see below).  
+   
+3. **Auth on the CLI (v2):**
+
+   OpenCode TUI can work with any number of providers like Anthropic, OpenAI or Mistral AI, or their OpenCode Go or OpenCode Zen services.
+
+   The big idea of this repo is that you can get a Mistral AI key, log in, and use Sans USA. Mistral AI is now hosting Z.ai models, which are IMHO ready for "prime time". 
+
+   If you wanna use a model hosted by the company behind opencode in the USA, great for experimenting, try:
+
+       opencode auth login opencode
+
+   The v1 command `opencode console login` did not work — use the v2
+   command above. Then run `/models` and select a model.
+
+   You **must** set up quota and keys, ideally a key per host and the like, to ensure it does not eat your wallet.
+
+## Box setup (after installing opencode TUI)
+
+The unit lives at locations such as `server/opencode-serve.service.ubuntu`, which is a service to run 
+`opencode serve` to bind WebSockets to localhost. Install it on
+the box (root):
+
+    install -m 644 opencode-serve.service.${distro} /etc/systemd/system/opencode-serve.service
+    systemctl daemon-reload
+    systemctl enable --now opencode-serve.service
+
+Note that means it starts by default; if you want to turn that off on prod, you ssh in and disable it so that you have to start it up and shut it down. 
+
+It binds `127.0.0.1:4096` only — nothing on the public interface; configure any 
+cloud firewall for openssl letsencrypt on 22/80/443, and nothing else opens. Auth is direct
+(v2 auth above); no proxy legs, no daemon, no ACP.
+
+## Attach from your laptop
+
+Now, the magic install: you SSH your key into the host and then set up a tunnel in one laptop terminal:
+
+    ssh -N -L 4096:127.0.0.1:4096 root@<box-host>
+
+Then, in a second startup opencode TUI to connect to the demon running on your VPS host:
+
+    opencode attach http://127.0.0.1:4096
+
+Sessions persist server-side in the opencode db, so reconnect + attach resumes. 
+
+## What is on this grapevine? 
+
+| Path | Purpose |
+|---|---|
+| `server/opencode-serve.service.ubuntu` | the systemd unit (loopback-only headless serve) |
+| `server/SETUP-NOTES.md.secret` | private runbook via git-veil (reveal with git-veil) |
+| `grapes/` | containers living on the boxes: Forgejo, Traefik, Zitadel, OpenResty sidecar |
+| `server/nftables/` | firewall configs for the boxes |
+| `docs/` | estate runbooks: DNS segregation, cloud firewall, SEV0 access loss, box policy templates |
 
 ## Releases
 
-The `SKILL.md` is version-stamped and attached to every GitHub release.
-To cut a release: `make tag` — it tags `YYYY.MM.DD-<short-sha>` (or
-`YYYY.MM.DD-dirty` if the tree is not clean) and pushes; CI appends the
-version footer to `SKILL.md` and attaches it to the release.
-
-## Quick start
-
-See `SKILL.md`.
+Tags are immutable, releases are disposable. No release is cut for
+config changes.

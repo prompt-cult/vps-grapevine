@@ -1,0 +1,19 @@
+[Unit]
+Description=opencode serve (headless, loopback-only) for SSH port-forward attach
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/opencode serve --hostname 127.0.0.1 --port 4096
+WorkingDirectory=/root
+Restart=on-failure
+RestartSec=5
+Environment=TERM=dumb
+Environment=PATH=/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=HOME=/root
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

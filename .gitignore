@@ -1,8 +1,11 @@
-__pycache__/
+# union of both lines' ignores
 *.pyc
 .env
-.tmp/
-server/SETUP-DEBIAN-TRIXIE.md
-grapes/zitadel/SKILL.md
-server/SETUP-NOTES.md
 .git-veil-canary.txt
+.tmp/
+VERSION
+__pycache__/
+grapes/zitadel/SKILL.md
+server/DECISION-LOG.md
+server/SETUP-DEBIAN-TRIXIE.md
+server/SETUP-NOTES.md
