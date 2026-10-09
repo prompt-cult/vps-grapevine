@@ -82,6 +82,7 @@ Sessions persist server-side in the opencode db, so reconnect + attach resumes.
 | `server/opencode-serve.service.ubuntu` | the systemd unit (loopback-only headless serve) |
 | `server/SETUP-NOTES.md.secret` | private runbook via git-veil (reveal with git-veil) |
 | `grapes/` | containers living on the boxes: Forgejo, Traefik, Zitadel, OpenResty sidecar |
+| `server/backup-sweep.sh` + `backup-sweep.conf.example` + `backup-to-scaleway.sh`/`backup-to-s3.sh` | box backup contract: nightly sweep (bundles+fileset tars to /opt/backup) + age-encrypted S3 uploader; S3 creds read at runtime from the git-veil vault |
 | `server/nftables/` | firewall configs for the boxes |
 | `docs/` | estate runbooks: DNS segregation, cloud firewall, SEV0 access loss, box policy templates |
 

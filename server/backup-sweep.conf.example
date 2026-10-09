@@ -1,0 +1,22 @@
+# backup-sweep.conf.example — copy to /opt/box-tools/backup-sweep.conf on a
+# new box and edit the lists. No secrets belong in this file (paths only).
+OUT=/opt/backup
+RETENTION=10
+
+# Repos: name|path|autocommit
+#   autocommit=1  local-only box repo (sweep auto-commits when dirty)
+#   autocommit=0  repo with a remote (bundle HEAD only, never auto-commit)
+REPOS=(
+  "box-memory|/root/.memory|1"
+  # "example|/opt/<project>|0"
+)
+
+# Filesets: name|comma,separated,paths (tarred only when content hash changes)
+FILESETS=(
+  "box-system|/etc/nftables.conf,/etc/crontab,/etc/ssh/sshd_config,/etc/systemd/system/opencode-serve.service"
+  "box-docs|/root/docs,/root/AGENTS.md"
+  "box-secrets|/root/.secrets,/root/.profile"
+)
+
+# Stores: name|path — non-git stores, copied+gzipped; skipped if absent.
+STORES=()
