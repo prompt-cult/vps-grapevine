@@ -64,3 +64,13 @@ The edge containers themselves must be `restart: unless-stopped` (or
 equivalent) so a daemon restart or box reboot brings the whole stack back
 without hand-holding. This is already estate law; the drop-in closes the
 remaining gap: the host service that the containers depend on.
+
+## Status on vps2 (2026-10-09) — applied; NOT closed until reboot proof
+
+- Drop-in installed + in-session verify battery green (4 binds, pg_isready,
+  zitadel api healthy, discovery 200). That is necessary, NOT sufficient.
+- CLOSING REQUIRES: (1) a reboot by the operator (agents never reboot) with
+  the verify battery re-run after boot; (2) external verification — public
+  endpoints and the browser path via the operator's Mac agent
+  (listed user lands; unlisted user 403s). In-session restarts prove nothing
+  about boot durability; do not claim this fix closed without both.
