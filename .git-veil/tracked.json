@@ -1,7 +1,7 @@
 {
   "files": [
-    "server/SETUP-NOTES.md",
     ".git-veil-canary.txt",
-    "server/DECISION-LOG.md"
+    "server/DECISION-LOG.md",
+    "server/SETUP-NOTES.md"
   ]
 }

@@ -1,6 +1,8 @@
 {
   "trusted_keys": {
-    "vps-grapevine+simbo1905@github.com": "44c5824fc8c8f890",
-    "vps-grapevine+prompt-cult@github.com": "44c5824fc8c8f890"
+    "vps-grapevine+prompt-cult@github.com": "325284e2a5754e7db67815fc481ffd1696a3d70e3617d8330e3e53ad00eba8a0"
+  },
+  "owner_fingerprints": {
+    "vps-grapevine+prompt-cult@github.com": "325284e2a5754e7db67815fc481ffd1696a3d70e3617d8330e3e53ad00eba8a0"
   }
 }
