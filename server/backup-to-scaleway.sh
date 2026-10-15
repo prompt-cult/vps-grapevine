@@ -7,7 +7,7 @@
 set -euo pipefail
 
 # creds come from the git-veil sealed vault at runtime; never plaintext on disk
-_vault=$(cd "${BACKUP_VAULT_DIR:-/opt/crispy-computing-machine}" && git-veil cat .vault 2>/dev/null) || { echo "FATAL: vault unreadable"; exit 1; }
+_vault=$(cd "${BACKUP_VAULT_DIR:-/opt/lse-ai-leadership}" && git-veil cat .vault 2>/dev/null) || { echo "FATAL: vault unreadable"; exit 1; }
 AWS_ACCESS_KEY_ID=$(printf '%s\n' "$_vault" | sed -n 's/^#   access_key: //p')
 AWS_SECRET_ACCESS_KEY=$(printf '%s\n' "$_vault" | sed -n 's/^#   secret_key: //p')
 export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY

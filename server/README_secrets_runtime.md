@@ -6,12 +6,24 @@ Law: passwords and secrets are git-veil sealed, never plaintext
 
 ## Vault location contract
 
-Every box clones the secrets vault repo (simbo1905/crispy-computing-machine)
-to a canonical path (`/opt/crispy-computing-machine` on vps0; parameterize
-via `BACKUP_VAULT_DIR` in scripts). Before first use:
+Every box clones the secrets vault repo (simbo1905/lse-ai-leadership)
+to a canonical path (`/opt/lse-ai-leadership` on vps0; parameterize
+via `BACKUP_VAULT_DIR` in scripts). Install the CURRENT git-veil release
+from https://github.com/prompt-cult/git-veil/releases — binary per
+platform, SHA-256 checked against the published `.sha256` asset before
+install; older releases are not supported. Before first use:
 
     cd <vault-path>
-    git-veil trust <repo-id> <owner-verifying-keyfile>
+    git-veil show-repo-id
+
+    # signing machine (holds a seed in ~/.git-veil/signing-keys.txt):
+    git-veil trust <repo-id>
+
+    # every other box (no seed): take the pin-file the signing machine
+    # exported (git-veil export-pin <repo-id> --output <file>, moved out
+    # of band) and import it:
+    git-veil trust --import <pin-file>
+
     git-veil verify-keyring && git-veil list-keys   # trust
     git-veil cat .vault                             # reveal TEST — must decrypt
 

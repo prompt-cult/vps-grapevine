@@ -16,7 +16,13 @@ On top of that, we have vines and grapes for setting up Traefik and Docker Compo
 
 The idea here is that all the user-facing code is in docker. The underlying box is only visible over port 22. The host has no userland. This means I use old-school big-boys rules to run as root; the sandbox IS the VPS. That relies on backups, DNS, and the like, with no secrets on any host that let it control anything beyond the docker images on the host. 
 
-Secrets need some concept of a vault; this project uses git-veil, inspired by git-secret but using `age` for encryption. The idea is you use this repo as a template to make your own logic environment dev|test|prod where there is a set of shared secrets of the resources used by the servers in the environment. 
+Secrets need some concept of a vault; this project uses git-veil, inspired by git-secret but using `age` for encryption. The idea is you use this repo as a template to make your own logic environment dev|test|prod where there is a set of shared secrets of the resources used by the servers in the environment.
+
+Install the **current** git-veil release on every machine that touches this
+repo: grab the binary for your platform from the
+[releases page](https://github.com/prompt-cult/git-veil/releases), check its
+SHA-256 against the published `.sha256` asset, then install it. Older
+releases are not supported.
 
 ## Official install path
 
